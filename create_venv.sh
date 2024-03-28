@@ -10,3 +10,4 @@ rm -rf $PROJECT_DIR/.venv
 
 poetry config virtualenvs.in-project true
 poetry install
+
