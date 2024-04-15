@@ -1,9 +1,8 @@
 from typing import Optional
-
+import aiomysql
 import uvicorn
 from fastapi import FastAPI
-
-from app.config import conf
+from app.util.db import DB
 
 
 def create_app():
@@ -11,9 +10,10 @@ def create_app():
     앱 함수 실행
     :return:
     """
-    c = conf()
+
     app = FastAPI()
 
+    DB().init_db()
     # 데이터 베이스 이니셜라이즈
 
     # 레디스 이니셜라이즈
@@ -23,7 +23,6 @@ def create_app():
     # 라우터 정의
 
     return app
-
 
 app = create_app()
 
