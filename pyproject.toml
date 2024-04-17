@@ -15,6 +15,9 @@ aiomysql = "^0.2.0"
 python-dotenv = "^1.0.1"
 sqlalchemy = "^2.0.29"
 pymysql = "^1.1.0"
+pyjwt = "^2.8.0"
+passlib = "^1.7.4"
+python-dateutil = "^2.9.0.post0"
 
 
 [build-system]

@@ -1,6 +1,13 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Request, Depends
+from app.service.attendee import AttendeeService
+from fastapi.templating import Jinja2Templates
+from datetime import datetime, timezone
 
-router = APIRouter()
+templates = Jinja2Templates(directory="./template")
 
-async def AttendeeController():
+async def attendee_default(
+        request: Request,
+        service: Depends(AttendeeService)
+):
+    cur_date = datetime.now(timezone.utc)
     return

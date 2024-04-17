@@ -11,7 +11,6 @@ class DB(SingletonClass):
     def __init__(self):
         super().__init__()
 
-
     def init_db(self):
         url = URL.create(
             drivername="mysql+aiomysql",
@@ -24,7 +23,7 @@ class DB(SingletonClass):
         self.engine = create_async_engine(url)
 
     async def get_db_session(self) -> AsyncSession:
-        sess = AsyncSession(bind=self.engine)
+        sess = AsyncSession(bind=self.engine, dictionary=True)
         try:
             yield sess
         finally:

@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>2024 경화여중 학부모 도우미 현황</title>
+</head>
+<body>
+    <h2>로그인 페이지</h2>
+    <form method="post" action="localhost:8000/login/request">
+        <label for="username">Username:</label>
+        <input type="text" id="username" name="username"><br>
+        <label for="password">Password:</label>
+        <input type="password" id="password" name="password"><br><br>
+        <input type="submit" value="Login" >
+    </form>
+    {% if error %}
+        <script>
+            alert("{{ error }}");
+        </script>
+    {% endif %}
+</body>
+</html>

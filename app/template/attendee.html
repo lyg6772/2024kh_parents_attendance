@@ -1,10 +1,71 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>2024 경화여중 학부모 급식 도움 달력</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>2024 경화여중 학부모 도우미 현황</title>
+<style>
+  .container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .top-bar {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+    padding: 10px 0;
+    border-bottom: 1px solid #ccc;
+    margin-bottom: 10px;
+  }
+  .calendar {
+    border-collapse: collapse;
+    width: 100%;
+  }
+  .calendar th, .calendar td {
+    border: 1px solid #dddddd;
+    text-align: center;
+    padding: 8px;
+  }
+  .calendar th {
+    background-color: #f2f2f2;
+  }
+</style>
 </head>
 <body>
+
+<div class="container">
+  <div class="top-bar">
+    <a href="localhost:8000/attendee/{{ prev_month }}">&lt; 이전 달</a>
+    <span>{{ current_year }}년 {{ current_month }}</span>
+    <a href="localhost:8000/attendee/{{ next_month }}">다음 달 &gt;</a>
+  </div>
+
+  <table class="calendar">
+    <tr>
+      <th>일</th>
+      <th>월</th>
+      <th>화</th>
+      <th>수</th>
+      <th>목</th>
+      <th>금</th>
+      <th>토</th>
+    </tr>
+    {% for week in cal %}
+      <tr>
+        {% for day, events in week.items() %}
+          <td>
+            {{ day }}
+            {% for event in events %}
+              <br>{{ event[0] }}
+              <br>{{ event[1] }}
+            {% endfor %}
+          </td>
+        {% endfor %}
+      </tr>
+    {% endfor %}
+  </table>
+</div>
 
 </body>
 </html>
