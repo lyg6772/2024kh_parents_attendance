@@ -5,9 +5,18 @@ from datetime import datetime, timezone
 
 templates = Jinja2Templates(directory="./template")
 
-async def attendee_default(
+
+async def attendee_get_default(
         request: Request,
-        service: Depends(AttendeeService)
+        service=Depends(AttendeeService)
 ):
     cur_date = datetime.now(timezone.utc)
-    return
+    return await service.get_attendee_table(request=request, date_str=cur_date.strftime('%Y%m'))
+
+
+async def attendee_get_year_month(
+        request: Request,
+        cal_date: str,
+        service=Depends(AttendeeService)
+):
+    return await service.get_attendee_table(request=request, date_str=cal_date)

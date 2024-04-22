@@ -24,7 +24,13 @@
                     body: formData
                 });
                 if (response.ok) {
-                    // 로그인 성공 시 리다이렉트 등 추가 처리
+                    const res_data = await response.json()
+                    const header = {'Authorization' : res_data.token}
+                    $.ajax({
+                        type:'get',
+                        url:'/attendee',
+                        headers: header
+                    })
                 } else {
                     // 401 예외 처리
                     if (response.status === 401) {

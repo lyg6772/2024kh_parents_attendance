@@ -2,9 +2,11 @@ from fastapi import Depends, HTTPException, Request
 from fastapi.templating import Jinja2Templates
 from app.dao.login import LoginDao
 from passlib.context import CryptContext
+from app.util.auth import AuthHandler
 
 templates = Jinja2Templates(directory="./template")
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+auth = AuthHandler()
 
 
 class LoginService:
@@ -18,8 +20,8 @@ class LoginService:
         hashed_password = await self.dao.get_password(user_name)
         if pwd_context.verify(password, hashed_password):
             # token 발행
-            # redirect admin
-            pass
+            encoded_token = auth.encode_token(user_id=user_name)
+            return {"token": encoded_token}
         else:
             raise HTTPException(
                 status_code=401,

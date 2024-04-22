@@ -36,9 +36,9 @@
 
 <div class="container">
   <div class="top-bar">
-    <a href="/attendee/{{ prev_month }}">&lt; 이전 달</a>
-    <span>{{ year }}년 {{ month }}월</span>
-    <a href="/attendee/{{ next_month }}">다음 달 &gt;</a>
+    <a href="localhost:8000/attendee/{{ prev_month }}">&lt; 이전 달</a>
+    <span>{{ current_year }}년 {{ current_month }}</span>
+    <a href="localhost:8000/attendee/{{ next_month }}">다음 달 &gt;</a>
   </div>
 
   <table class="calendar">
