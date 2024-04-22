@@ -9,4 +9,4 @@ class SingletonMeta(type):
 
 class SingletonClass(metaclass=SingletonMeta):
     def __init__(self):
-        pass
+        super().__init__()

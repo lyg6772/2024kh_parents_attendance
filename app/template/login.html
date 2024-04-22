@@ -5,17 +5,37 @@
 </head>
 <body>
     <h2>로그인 페이지</h2>
-    <form method="post" action="localhost:8000/login/request">
+    <form id="login-form" method="post" action="/login/request">
         <label for="username">Username:</label>
         <input type="text" id="username" name="username"><br>
         <label for="password">Password:</label>
         <input type="password" id="password" name="password"><br><br>
         <input type="submit" value="Login" >
     </form>
-    {% if error %}
-        <script>
-            alert("{{ error }}");
-        </script>
-    {% endif %}
+    <div id="error-message" style="display: none;"></div>
+
+    <script>
+        document.getElementById('login-form').addEventListener('submit', async function(event) {
+            event.preventDefault();
+            const formData = new FormData(this);
+            try {
+                const response = await fetch('/login/request', {
+                    method: 'POST',
+                    body: formData
+                });
+                if (response.ok) {
+                    // 로그인 성공 시 리다이렉트 등 추가 처리
+                } else {
+                    // 401 예외 처리
+                    if (response.status === 401) {
+                        alert("로그인 실패. 다시 로그인 해주세요")
+                    }
+                }
+            } catch (error) {
+                console.error('Error occurred:', error);
+            }
+        });
+    </script>
+
 </body>
 </html>

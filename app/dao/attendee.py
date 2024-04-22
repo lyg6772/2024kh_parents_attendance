@@ -1,8 +1,9 @@
 from app.util.db import DB
+from fastapi import Depends
 
 class AttendeeDao:
-    def __init__(self):
-        self.db = DB()
+    def __init__(self, db_session=Depends(DB().get_db_session)):
+        self.session = db_session
 
     async def get_attendee(self, start_dt: str, end_dt: str):
         query = """
@@ -10,11 +11,11 @@ class AttendeeDao:
         FROM attendance.KY_ATDC_L D 
         LEFT JOIN attendance.KY_ATDC_NOTC_L
         ON D.ATDC_DATE = L.ATDC_DATE
-        WHERE D.ATDC_DATE >= %(start_dt)
-        AND D.ATDC_DATE <= %(end_dt)
+        WHERE D.ATDC_DATE >= :start_dt
+        AND D.ATDC_DATE <= :end_dt
         GROUP BY D.ATDC_DATE
         """
         data = {"start_dt": start_dt, "end_dt": end_dt}
-        with self.db.get_db_session() as session:
-            result = session.execute(query, data)
-            return result
+        async with self.session as session:
+            result = await session.execute(query, {"start_dt": start_dt, "end_dt": end_dt})
+            return result.fetchall()
