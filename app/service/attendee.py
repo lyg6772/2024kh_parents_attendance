@@ -19,6 +19,8 @@ class AttendeeService:
         attendance_info = await self.dao.get_attendee(
             start_dt=start_dt.strftime('%Y-%m-%d'), end_dt=end_dt.strftime('%Y-%m-%d')
         )
+        year = start_dt.year
+        month = start_dt.month
         starting_weekday = start_dt.weekday()
         num_days = (end_dt - start_dt).days + 1
         calendar = []
@@ -26,7 +28,14 @@ class AttendeeService:
         for i in range(starting_weekday):
             week.append(None)
         for day in range(1, num_days + 1):
-            week.append(day)
+            day_str = f'{year}-{month}-{day}'
+
+            week.append(
+                {
+                    "day":day,
+                    # "attendee":
+                 }
+            )
             if len(week) == 7:
                 calendar.append(week)
                 week = []
