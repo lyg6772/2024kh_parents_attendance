@@ -19,29 +19,20 @@ class AttendeeService:
         attendance_info = await self.dao.get_attendee(
             start_dt=start_dt.strftime('%Y-%m-%d'), end_dt=end_dt.strftime('%Y-%m-%d')
         )
-        year = start_dt.year
-        month = start_dt.month
-        starting_weekday = start_dt.weekday()
+        starting_weekday = start_dt.isoweekday()
         num_days = (end_dt - start_dt).days + 1
         calendar = []
         week = []
         for i in range(starting_weekday):
-            week.append(None)
+            week.append({"day": None, "attendee": '', 'notice': '', "date": None})
         for day in range(1, num_days + 1):
-            day_str = f'{year}-{month}-{day}'
-
-            week.append(
-                {
-                    "day":day,
-                    # "attendee":
-                 }
-            )
+            week.append({"day": day, "attendee": 'testtesttestestㅅㅅㅅㄷㄷㄴㄴㄴㅇㅀㅁㅇ', 'notice': 'testtesttest', "date": f"{date_str}{day:02d}"})
             if len(week) == 7:
                 calendar.append(week)
                 week = []
         if week:
             while len(week) < 7:
-                week.append(None)
+                week.append({"day": None, "attendee": '', 'notice': '', "date": None})
             calendar.append(week)
 
         return templates.TemplateResponse('./attendee.html', context={

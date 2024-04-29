@@ -20,12 +20,13 @@
   }
   .calendar {
     border-collapse: collapse;
-    width: 100%;
+    width: 80%;
   }
   .calendar th, .calendar td {
     border: 1px solid #dddddd;
     text-align: center;
     padding: 8px;
+    width: calc(100% / 7);
   }
   .calendar th {
     background-color: #f2f2f2;
@@ -36,9 +37,9 @@
 
 <div class="container">
   <div class="top-bar">
-    <a href="localhost:8000/attendee/{{ prev_month }}">&lt; 이전 달</a>
-    <span>{{ current_year }}년 {{ current_month }}</span>
-    <a href="localhost:8000/attendee/{{ next_month }}">다음 달 &gt;</a>
+    <a href="#" onclick="attendee_redirect({{ prev_month }})">&lt; 이전 달</a>
+    <span>{{ year }}년 {{ month }}월</span>
+    <a href="#" onclick="attendee_redirect({{ next_month }})">다음 달 &gt;</a>
   </div>
 
   <table class="calendar">
