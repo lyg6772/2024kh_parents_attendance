@@ -1,7 +1,7 @@
 from dotenv import load_dotenv
 import os
 
-env_path = f'{os.getcwd()}/.env'
+env_path = f'{os.getcwd()}/app/.env'
 load_dotenv(env_path)
 
 DB_HOST = os.environ.get("DB_HOST", '')

@@ -7,7 +7,7 @@ from fastapi.templating import Jinja2Templates
 
 templates = Jinja2Templates(directory="./app/template")
 
-class AttendeeService:
+class AdminAttendeeService:
     def __init__(self, dao: AttendeeDao = Depends(AttendeeDao)):
         self.dao = dao
 
@@ -35,7 +35,7 @@ class AttendeeService:
                 week.append({"day": None, "attendee": '', 'notice': '', "date": None})
             calendar.append(week)
 
-        return templates.TemplateResponse('./attendee.html', context={
+        return templates.TemplateResponse('./admin_attendee.html', context={
             "year": start_dt.year,
             "month": start_dt.month,
             "prev_month": before_month_str,

@@ -17,4 +17,4 @@ async def login_post(
         password: str = Form(...),
         service=Depends(LoginService)
 ):
-    return await service.login_post(user_name=username, password=password)
+    return await service.login_post(user_name=username, password=password, request=request)

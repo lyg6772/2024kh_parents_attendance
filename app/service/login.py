@@ -3,8 +3,9 @@ from fastapi.templating import Jinja2Templates
 from app.dao.login import LoginDao
 from passlib.context import CryptContext
 from app.util.auth import AuthHandler
+from fastapi.responses import RedirectResponse
 
-templates = Jinja2Templates(directory="./template")
+templates = Jinja2Templates(directory="./app/template")
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 auth = AuthHandler()
 
@@ -16,12 +17,14 @@ class LoginService:
     async def login_template(self, request: Request):
         return templates.TemplateResponse("login.html", {"request": request})
 
-    async def login_post(self, user_name, password):
+    async def login_post(self, user_name, password, request):
         hashed_password = await self.dao.get_password(user_name)
         if pwd_context.verify(password, hashed_password):
             # token 발행
             encoded_token = auth.encode_token(user_id=user_name)
-            return {"token": encoded_token}
+            header = {"Authorization": f'Bearer {encoded_token}'}
+            redirectRes = RedirectResponse(url="/admin/attendee", status_code=302, headers=header)
+            return redirectRes
         else:
             raise HTTPException(
                 status_code=401,
