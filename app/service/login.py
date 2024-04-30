@@ -22,8 +22,8 @@ class LoginService:
         if pwd_context.verify(password, hashed_password):
             # token 발행
             encoded_token = auth.encode_token(user_id=user_name)
-            header = {"Authorization": f'Bearer {encoded_token}'}
-            redirectRes = RedirectResponse(url="/admin/attendee", status_code=302, headers=header)
+            redirectRes = RedirectResponse(url="/admin/attendee", status_code=301)
+            redirectRes.set_cookie(key="token", value=encoded_token)
             return redirectRes
         else:
             raise HTTPException(

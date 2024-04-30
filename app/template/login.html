@@ -24,12 +24,8 @@
                     body: formData
                 });
                 if (response.ok) {
-                    const res_data = await response.json();
-                    const token = res_data.token;
-                    const headers = {
-                        'Authorization': `Bearer ${token}`
-                    };
-                    localStorage.setItem('token', token);
+
+                    window.location.href = '/admin/attendee'
                 } else {
                     // 401 예외 처리
                     if (response.status === 401) {

@@ -11,7 +11,8 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 auth_handler = AuthHandler()
 
 
-async def get_current_user(token: str = Depends(oauth2_scheme)):
+async def get_current_user(request: Request):
+    token = request.cookies.get("token", '')
     user_id = auth_handler.decode_token(token)
     if not user_id:
         raise HTTPException(status_code=401, detail='Could not validate credentials')
