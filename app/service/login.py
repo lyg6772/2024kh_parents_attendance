@@ -3,7 +3,7 @@ from fastapi.templating import Jinja2Templates
 from app.dao.login import LoginDao
 from passlib.context import CryptContext
 from app.util.auth import AuthHandler
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse
 
 templates = Jinja2Templates(directory="./app/template")
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -22,9 +22,9 @@ class LoginService:
         if pwd_context.verify(password, hashed_password):
             # token 발행
             encoded_token = auth.encode_token(user_id=user_name)
-            redirectRes = RedirectResponse(url="/admin/attendee", status_code=301)
-            redirectRes.set_cookie(key="token", value=encoded_token)
-            return redirectRes
+            res = JSONResponse(content={"token": encoded_token})
+            res.set_cookie(key="token", value=encoded_token)
+            return res
         else:
             raise HTTPException(
                 status_code=401,

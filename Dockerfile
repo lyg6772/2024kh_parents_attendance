@@ -1,7 +1,7 @@
 from python:3.12.2
 
-WORKDIR /app/
+WORKDIR /
 
 RUN poetry install
 
-RUN /main.py
+RUN /run.py

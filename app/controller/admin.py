@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, Depends, HTTPException
+from fastapi import Request, Depends, HTTPException
 from app.service.admin import AdminAttendeeService
 from fastapi.templating import Jinja2Templates
 from datetime import datetime, timezone
@@ -14,6 +14,7 @@ auth_handler = AuthHandler()
 async def get_current_user(request: Request):
     token = request.cookies.get("token", '')
     user_id = auth_handler.decode_token(token)
+
     if not user_id:
         raise HTTPException(status_code=401, detail='Could not validate credentials')
     return user_id
@@ -35,3 +36,11 @@ async def admin_attendee_get_year_month(
         user: str = Depends(get_current_user)
 ):
     return await service.get_attendee_table(request=request, date_str=cal_date)
+
+
+async def admin_attendee_post(
+        request: Request,
+        service=Depends(AdminAttendeeService),
+        user: str = Depends(get_current_user)
+):
+    return await service.post_attendee(request=request)

@@ -25,6 +25,7 @@
     border-collapse: collapse;
     width: 80%;
   }
+
   .calendar th, .calendar td {
     border: 1px solid #dddddd;
     text-align: left;
@@ -38,6 +39,9 @@
   .calendar th {
     background-color: #f2f2f2;
   }
+  #input-div{
+    margin-left: 10%;
+  }
 </style>
 </head>
 <body>
@@ -45,7 +49,7 @@
 <div class="container">
   <div class="top-bar">
     <a href="#" onclick="attendee_redirect({{ prev_month }})">&lt; 이전 달</a>
-    <span>{{ year }}년 {{ month }}월</span>
+    <h2>{{ year }}년 {{ month }}월</h2>
     <a href="#" onclick="attendee_redirect({{ next_month }})">다음 달 &gt;</a>
   </div>
 
@@ -62,7 +66,7 @@
     {% for week in calendar %}
       <tr>
         {% for events in week %}
-      <td>
+      <td {% if events.date %} date="{{ events.date }}" onclick="showInputBox({{ events.date }})" {% endif %} >
         {% if events.day %}
           {{ events.day }}
         {% endif %}
@@ -72,20 +76,26 @@
         {% if events.notice %}
           <br>특이사항: {{ events.notice }}
         {% endif %}
-
+        {% if events.date %}
+          <input type="hidden" name="{{ events.date }}" value='{{ events|tojson }}'>
+        {% endif %}
         {% endfor %}
+      </td>
       </tr>
     {% endfor %}
   </table>
 </div>
+<div id="input-div">
+
+</div>
 <script>
-  function attendee_redirect(month) {
+function attendee_redirect(month) {
 
       // XMLHttpRequest 객체 생성
       var xhr = new XMLHttpRequest();
 
       // 요청 준비
-      xhr.open('GET', 'admin/attendee/' + month, true);
+      xhr.open('GET', '/admin/attendee/' + month, true);
 
       // 요청 완료 후의 동작 정의
       xhr.onreadystatechange = function() {
@@ -93,7 +103,7 @@
               // 요청이 완료되면 응답을 확인하여 리다이렉트
               if (xhr.status === 200) {
                   // 응답이 성공적으로 받아지면 리다이렉트 수행
-                  window.location.href = 'admin/attendee/'+ month;
+                  window.location.href = '/admin/attendee/'+ month;
               } else {
                   // 응답이 실패했을 때의 처리 (예: 오류 메시지 출력)
                   console.error('Request failed with status: ' + xhr.status);
@@ -105,6 +115,61 @@
       xhr.send();
   }
 
+  function showInputBox(cal_date) {
+      // 하단에 입력 칸을 표시할 div 선택
+      var hiddenInput = document.querySelector(`input[name="${cal_date}"]`);
+      console.log(hiddenInput)
+      var events = JSON.parse(hiddenInput.value)
+      var inputDiv = document.getElementById('input-div');
+
+      // 입력 칸의 HTML 코드 생성
+      var inputHTML = `
+          <h2> ${events.date} 참석자 입력 </h2>
+          <label for="attendee">참석자: </label>
+          <input type="text" id="attendee" name="attendee" value=${events.attendee}><br>
+          <label for="notice">특이사항:</label>
+          <input id="notice" name="notice" value=${events.notice}></input><br><br>
+          <button onclick="inputAttendee(${events.date})">저장</button>
+          <button onclick="hideInputBox()">취소</button>
+      `;
+
+      // 입력 칸을 div에 추가
+      inputDiv.innerHTML = inputHTML;
+    }
+
+    // 입력 칸을 숨기는 함수
+    function hideInputBox() {
+        var inputDiv = document.getElementById('input-div');
+        inputDiv.innerHTML = ''; // 입력 칸 내용 초기화
+    }
+
+    // 폼 제출 함수
+    function inputAttendee(attendee_date) {
+        var attendee = document.getElementById('attendee').value;
+        var notice = document.getElementById('notice').value;
+
+        var jsonData = {
+            attendee: attendee,
+            notice: notice,
+            date: attendee_date
+        }
+
+        fetch('/admin/attendee',{
+            method: 'POST',
+            headers: {
+                'content-type':'application/json'
+            },
+            body: JSON.stringify(jsonData)
+        })
+        .then(response => {
+            if(!response.ok) {
+                alert("데이터 입력 실패. 잠시 후 다시 한번 시도해주세요")
+            }
+            else {
+                window.location.reload()
+            }
+        })
+    }
 </script>
 </body>
 </html>

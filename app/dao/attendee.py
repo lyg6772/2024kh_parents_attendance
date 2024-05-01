@@ -9,15 +9,27 @@ class AttendeeDao:
 
     async def get_attendee(self, start_dt: str, end_dt: str):
         query = text("""
-        SELECT D.ATDC_DATE, GROUP_CONCAT(D.ATDE_NAME) AS ATDE_NAME, L.ATDC_NOTICE
-        FROM attendance.KY_ATDC_L D 
-        LEFT JOIN attendance.KY_ATDC_NOTC_L L
-        ON D.ATDC_DATE = L.ATDC_DATE
-        WHERE D.ATDC_DATE >= :start_dt
-        AND D.ATDC_DATE <= :end_dt
-        GROUP BY D.ATDC_DATE
+        SELECT ATDC_DATE, GROUP_CONCAT(ATDE_NAME) AS ATDE_NAME
+        FROM attendance.KY_ATDC_L 
+        WHERE ATDC_DATE >= :start_dt
+        AND ATDC_DATE <= :end_dt
+        GROUP BY ATDC_DATE
         """)
         data = {"start_dt": start_dt, "end_dt": end_dt}
         async with self.session as session:
-            result = await session.execute(query, {"start_dt": start_dt, "end_dt": end_dt})
-            return result.fetchall()
+            result = await session.execute(query, data)
+            response = result.mappings().all()
+            return response
+
+    async def get_notice(self, start_dt: str, end_dt: str):
+        query = text("""
+        SELECT ATDC_DATE, ATDC_NOTICE
+        FROM attendance.KY_ATDC_NOTC_L 
+        WHERE ATDC_DATE >= :start_dt
+        AND ATDC_DATE <= :end_dt
+        """)
+        data = {"start_dt": start_dt, "end_dt": end_dt}
+        async with self.session as session:
+            result = await session.execute(query, data)
+            response = result.mappings().all()
+            return response
