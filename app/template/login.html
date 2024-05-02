@@ -1,19 +1,27 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>2024 경화여중 학부모 도우미 현황</title>
+    <title>2024 경화여중 학부모 보람교사 현황</title>
 </head>
 <body>
-    <h2>로그인 페이지</h2>
-    <form id="login-form" method="post" action="/login/request">
-        <label for="username">Username:</label>
+    <h2 align="center">관리자 로그인 페이지</h2>
+    <form id="login-form" method="post" align="center" action="/login/request">
+        <label for="username" >Username:</label>
         <input type="text" id="username" name="username"><br>
         <label for="password">Password:</label>
         <input type="password" id="password" name="password"><br><br>
         <input type="submit" value="Login" >
     </form>
     <div id="error-message" style="display: none;"></div>
+<style>
+<!--  #login-form {-->
+<!--    display: flex;-->
+<!--    flex-direction: column;-->
+<!--    align-items: center;-->
 
+<!--    width: 100%;-->
+<!--  }-->
+  </style>
     <script>
         document.getElementById('login-form').addEventListener('submit', async function(event) {
             event.preventDefault();

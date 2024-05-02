@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>2024 경화여중 학부모 도우미 현황</title>
+<title>2024 경화여중 학부모 보람교사 현황</title>
 <style>
   .container {
     display: flex;
@@ -52,6 +52,9 @@
   top: 0;
   transform: translateX(10px); /* 약간의 여백을 주기 위해 조정 가능 */
 }
+  #input-div{
+    margin-left: 10%;
+  }
 </style>
 </head>
 <body>
@@ -78,7 +81,7 @@
     {% for week in calendar %}
       <tr>
         {% for events in week %}
-      <td>
+      <td {% if events.date %} date="{{ events.date }}" onclick="showInputBox({{ events.date }})" {% endif %}>
         {% if events.day %}
           {{ events.day }}
         {% endif %}
@@ -88,11 +91,17 @@
         {% if events.notice %}
           <br>특이사항: {{ events.notice }}
         {% endif %}
+        {% if events.date %}
+          <input type="hidden" name="{{ events.date }}" value='{{ events|tojson }}'>
+        {% endif %}
 
         {% endfor %}
       </tr>
     {% endfor %}
   </table>
+</div>
+<div id="input-div">
+
 </div>
 <script>
   function attendee_redirect(month) {
@@ -120,7 +129,26 @@
       // 요청 보내기
       xhr.send();
   }
+  function showInputBox(cal_date) {
+        // 하단에 입력 칸을 표시할 div 선택
+        var hiddenInput = document.querySelector(`input[name="${cal_date}"]`);
+        console.log(hiddenInput)
+        var events = JSON.parse(hiddenInput.value)
+        var inputDiv = document.getElementById('input-div');
 
+        // 입력 칸의 HTML 코드 생성
+        var inputHTML = `
+            <h2> ${events.date} 보람교사 현황 </h2>
+            <label for="attendee">참석자: ${events.attendee}</label> <br>
+
+            <label for="notice">특이사항: ${events.notice}</label>
+
+
+        `;
+
+        // 입력 칸을 div에 추가
+        inputDiv.innerHTML = inputHTML;
+      }
 </script>
 </body>
 </html>
