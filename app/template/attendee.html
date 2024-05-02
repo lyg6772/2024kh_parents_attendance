@@ -145,9 +145,10 @@
 
 
         `;
-
+        if (events.attendee && events.attendee.length > 0) {
         // 입력 칸을 div에 추가
-        inputDiv.innerHTML = inputHTML;
+          inputDiv.innerHTML = inputHTML;
+        }
       }
 </script>
 </body>
