@@ -1,9 +1,8 @@
-from typing import Optional
-import aiomysql
-
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from app.util.db import DB
 from app.controller.router import router
+from fastapi.exceptions import HTTPException
+from fastapi.responses import RedirectResponse
 
 
 def create_app():
@@ -34,3 +33,6 @@ def health_check():
     return {"200": "ok"}
 
 
+@app.exception_handler(401)
+def except_unauthorized_handling(request: Request, exc: HTTPException):
+    return RedirectResponse(url='/login')
