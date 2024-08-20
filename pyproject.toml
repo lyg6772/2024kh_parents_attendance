@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "2024kh-parents-attendance"
-version = "1.0.2"
+version = "1.0.3"
 description = ""
 authors = ["lyg6772 <lyg6772@gmail.com>"]
 readme = "README.md"
