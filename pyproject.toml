@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "2024kh-parents-attendance"
-version = "1.0.2"
+version = "1.0.3"
 description = ""
 authors = ["lyg6772 <lyg6772@gmail.com>"]
 readme = "README.md"
@@ -16,9 +16,10 @@ python-dotenv = "^1.0.1"
 sqlalchemy = "^2.0.29"
 pymysql = "^1.1.0"
 pyjwt = "^2.8.0"
-passlib = "^1.7.4"
+passlib = {extras = ["bcrypt"], version = "^1.7.4"}
 python-dateutil = "^2.9.0.post0"
 python-multipart = "^0.0.9"
+cryptography = "^44.0.3"
 
 
 [build-system]
