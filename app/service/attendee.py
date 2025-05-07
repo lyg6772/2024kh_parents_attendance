@@ -32,8 +32,9 @@ class AttendeeService:
         num_days = (end_dt - start_dt).days + 1
         calendar = []
         week = []
-        for i in range(starting_weekday):
-            week.append({"day": None, "attendee": '', 'notice': '', "date": None})
+        if starting_weekday != 7:
+            for i in range(starting_weekday):
+                week.append({"day": None, "attendee": '', 'notice': '', "date": None})
         for day in range(1, num_days + 1):
             cal_date = f"{date_str}{day:02d}"
             week.append({"day": day, "attendee": attendee_dict.get(cal_date, ''), 'notice': notice_dict.get(cal_date, ''), "date": cal_date})
