@@ -21,13 +21,23 @@ class AttendeeService:
         )
         attendee_dict = dict()
         for attendance in attendance_raw:
-            attendee_dict[attendance['ATDC_DATE']] = attendance['ATDE_NAME']
+            # 컬럼명을 소문자로 변환하여 접근
+            atdc_date = attendance.get('atdc_date') or attendance.get('ATDC_DATE')
+            atde_name = attendance.get('atde_name') or attendance.get('ATDE_NAME')
+            if atdc_date:
+                attendee_dict[atdc_date] = atde_name or ''
+
         notice_raw = await self.dao.get_notice(
             start_dt=start_dt.strftime('%Y%m%d'), end_dt=end_dt.strftime('%Y%m%d')
         )
         notice_dict = dict()
         for notice in notice_raw:
-            notice_dict[notice['ATDC_DATE']] = notice['ATDC_NOTICE']
+            # 컬럼명을 소문자로 변환하여 접근
+            atdc_date = notice.get('atdc_date') or notice.get('ATDC_DATE')
+            atdc_notice = notice.get('atdc_notice') or notice.get('ATDC_NOTICE')
+            if atdc_date:
+                notice_dict[atdc_date] = atdc_notice or ''
+
         starting_weekday = start_dt.isoweekday()
         num_days = (end_dt - start_dt).days + 1
         calendar = []

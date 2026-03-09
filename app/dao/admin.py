@@ -9,7 +9,7 @@ class AdminAttendeeDao:
 
     async def get_attendee(self, start_dt: str, end_dt: str):
         query = text("""
-        SELECT ATDC_DATE, LISTAGG(ATDE_NAME) AS ATDE_NAME
+        SELECT ATDC_DATE, LISTAGG(ATDE_NAME, ',') WITHIN GROUP (ORDER BY ATDE_NAME) AS ATDE_NAME
         FROM KY_ATDC_L 
         WHERE ATDC_DATE >= :start_dt
         AND ATDC_DATE <= :end_dt

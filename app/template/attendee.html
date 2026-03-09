@@ -14,176 +14,204 @@
         }
 
         body {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background-color: #f5f7fa;
             min-height: 100vh;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif;
+            padding: 15px;
         }
 
         .main-container {
-            max-width: 1200px;
+            max-width: 1100px;
             margin: 0 auto;
         }
 
         /* 상단 헤더 */
         .header {
             background: white;
-            border-radius: 12px;
-            padding: 25px;
-            margin-bottom: 30px;
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 25px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
         }
 
-        .header-top {
+        .header-content {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 20px;
-            flex-wrap: wrap;
             gap: 15px;
+            flex-wrap: wrap;
         }
 
         .header-title {
-            font-size: 32px;
-            font-weight: 700;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-
-        .month-nav {
-            display: flex;
-            gap: 20px;
-            align-items: center;
-        }
-
-        .month-nav a {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 10px 20px;
-            border-radius: 8px;
-            text-decoration: none;
+            font-size: 24px;
             font-weight: 600;
-            transition: all 0.3s;
-            cursor: pointer;
-            border: none;
+            color: #1a1a1a;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            white-space: nowrap;
+            flex-shrink: 0;
+            width: 190px;
         }
 
-        .month-nav a:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        .header-title i {
+            color: #4f63f7;
+            font-size: 28px;
+        }
+
+        .month-section {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex: 1;
+            justify-content: center;
+            min-width: 280px;
+        }
+
+        .month-btn {
+            background: #4f63f7;
             color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 13px;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .month-btn:hover {
+            background: #3d4cc4;
+            transform: translateY(-1px);
         }
 
         .month-display {
-            font-size: 24px;
+            font-size: 18px;
             font-weight: 600;
-            color: #333;
-            min-width: 200px;
+            color: #1a1a1a;
+            min-width: 140px;
             text-align: center;
         }
 
         .login-link {
             background: #f0f2f5;
-            padding: 12px 20px;
-            border-radius: 8px;
+            padding: 8px 16px;
+            border-radius: 6px;
             text-decoration: none;
-            color: #667eea;
-            font-weight: 600;
-            transition: all 0.3s;
+            color: #4f63f7;
+            font-weight: 500;
+            font-size: 13px;
+            transition: all 0.2s;
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-shrink: 0;
+            width: 190px;
+            justify-content: center;
         }
 
         .login-link:hover {
             background: #e0e2e5;
-            color: #764ba2;
+            color: #3d4cc4;
         }
 
         /* 캘린더 스타일 */
         .calendar-wrapper {
             background: white;
-            border-radius: 12px;
-            padding: 30px;
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
-            margin-bottom: 30px;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            margin-bottom: 25px;
+            overflow-x: auto;
         }
 
         .calendar {
             width: 100%;
             border-collapse: collapse;
+            table-layout: fixed;
+        }
+
+        .calendar th,
+        .calendar td {
+            width: 14.28%;
         }
 
         .calendar th {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #4f63f7;
             color: white;
-            padding: 15px;
+            padding: 14px 8px;
             text-align: center;
             font-weight: 600;
-            font-size: 14px;
+            font-size: 13px;
         }
 
         .calendar td {
-            border: 1px solid #e0e0e0;
-            padding: 15px;
-            height: 120px;
+            border: 1px solid #e8eaef;
+            padding: 10px;
+            height: 110px;
             vertical-align: top;
             cursor: pointer;
-            transition: all 0.3s;
-            background: #fafafa;
+            transition: all 0.2s;
+            background: #ffffff;
             position: relative;
+            font-size: 13px;
+            overflow: hidden;
         }
 
         .calendar td:hover {
-            background: #f0f2f5;
-            box-shadow: inset 0 0 10px rgba(102, 126, 234, 0.1);
-        }
-
-        .calendar td.today {
-            background: #e8eaf6;
-            border: 2px solid #667eea;
+            background: #f9faff;
+            border-color: #4f63f7;
         }
 
         .calendar-day {
             font-weight: 700;
-            color: #333;
+            color: #1a1a1a;
             font-size: 16px;
-            margin-bottom: 8px;
+            margin-bottom: 4px;
         }
 
         .calendar-attendee {
             font-size: 12px;
-            color: #667eea;
-            font-weight: 600;
+            color: #2563eb;
+            font-weight: 700;
             margin: 4px 0;
-            word-break: break-word;
+            line-height: 1.3;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .calendar-notice {
             font-size: 11px;
-            color: #ff9800;
+            color: #d97706;
             font-weight: 600;
             margin-top: 4px;
-            word-break: break-word;
-        }
-
-        .calendar-empty {
-            color: #ccc;
+            line-height: 1.3;
+            display: -webkit-box;
+            -webkit-line-clamp: 1;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         /* 입력 창 스타일 */
-        .input-container {
+        .info-container {
             background: white;
-            border-radius: 12px;
-            padding: 30px;
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
-            margin-bottom: 30px;
+            border-radius: 10px;
+            padding: 25px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            margin-bottom: 25px;
             animation: slideIn 0.3s ease-out;
         }
 
         @keyframes slideIn {
             from {
                 opacity: 0;
-                transform: translateY(20px);
+                transform: translateY(10px);
             }
             to {
                 opacity: 1;
@@ -191,107 +219,18 @@
             }
         }
 
-        .input-container h2 {
-            color: #333;
-            margin-bottom: 25px;
-            font-weight: 700;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .input-container h2 i {
-            color: #667eea;
-        }
-
-        .form-group {
-            margin-bottom: 20px;
-        }
-
-        .form-group label {
-            font-weight: 600;
-            color: #333;
-            margin-bottom: 8px;
-            display: block;
-        }
-
-        .form-group input {
-            width: 100%;
-            padding: 12px 15px;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            font-size: 14px;
-            transition: all 0.3s;
-        }
-
-        .form-group input:focus {
-            outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-        }
-
-        .button-group {
-            display: flex;
-            gap: 10px;
-            margin-top: 25px;
-        }
-
-        .btn-save {
-            flex: 1;
-            padding: 12px 20px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s;
-            font-size: 14px;
-        }
-
-        .btn-save:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-        }
-
-        .btn-cancel {
-            flex: 1;
-            padding: 12px 20px;
-            background: #f0f2f5;
-            color: #667eea;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s;
-            font-size: 14px;
-        }
-
-        .btn-cancel:hover {
-            background: #e0e2e5;
-            border-color: #667eea;
-        }
-
-        /* 정보 표시 창 */
-        .info-container {
-            background: white;
-            border-radius: 12px;
-            padding: 30px;
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
-            animation: slideIn 0.3s ease-out;
-        }
-
         .info-container h2 {
-            color: #333;
+            color: #1a1a1a;
             margin-bottom: 20px;
-            font-weight: 700;
+            font-weight: 600;
             display: flex;
             align-items: center;
             gap: 10px;
+            font-size: 18px;
         }
 
         .info-container h2 i {
-            color: #667eea;
+            color: #4f63f7;
         }
 
         .info-group {
@@ -300,62 +239,165 @@
 
         .info-label {
             font-weight: 600;
-            color: #667eea;
-            font-size: 14px;
+            color: #4f63f7;
+            font-size: 13px;
+            margin-bottom: 6px;
         }
 
         .info-value {
-            color: #333;
-            font-size: 16px;
-            margin-top: 5px;
-            padding: 10px;
-            background: #f5f5f5;
+            color: #1a1a1a;
+            font-size: 15px;
+            padding: 12px;
+            background: #f9faff;
             border-radius: 6px;
             word-break: break-word;
+            border-left: 4px solid #4f63f7;
+            line-height: 1.6;
         }
 
-        .empty-state {
-            text-align: center;
-            color: #ccc;
-            padding: 20px;
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .btn-close {
+            flex: 1;
+            padding: 10px 16px;
+            background: #f0f2f5;
+            color: #1a1a1a;
+            border: none;
+            border-radius: 6px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-close:hover {
+            background: #e0e2e5;
         }
 
         /* 반응형 디자인 */
         @media (max-width: 768px) {
-            .header-top {
-                flex-direction: column;
-            }
-
-            .month-nav {
-                width: 100%;
-                justify-content: space-between;
-            }
-
-            .month-display {
-                width: 100%;
-            }
-
-            .calendar td {
+            body {
                 padding: 10px;
-                height: 100px;
-                font-size: 12px;
             }
 
-            .calendar-day {
-                font-size: 14px;
+            .header {
+                padding: 15px;
+                margin-bottom: 20px;
             }
 
-            .calendar-attendee,
-            .calendar-notice {
-                font-size: 10px;
-            }
-
-            .button-group {
+            .header-content {
                 flex-direction: column;
+                gap: 12px;
             }
 
             .header-title {
-                font-size: 24px;
+                font-size: 20px;
+                width: 100%;
+                justify-content: center;
+            }
+
+            .month-section {
+                width: 100%;
+                min-width: unset;
+            }
+
+            .month-display {
+                font-size: 16px;
+                min-width: 120px;
+            }
+
+            .month-btn {
+                font-size: 12px;
+                padding: 6px 12px;
+            }
+
+            .login-link {
+                width: 100%;
+                justify-content: center;
+                font-size: 12px;
+                padding: 10px 12px;
+            }
+
+            .calendar-wrapper {
+                padding: 12px;
+                margin-bottom: 20px;
+            }
+
+            .calendar th {
+                padding: 10px 4px;
+                font-size: 12px;
+            }
+
+            .calendar td {
+                padding: 8px 4px;
+                min-height: 80px;
+                font-size: 11px;
+            }
+
+            .calendar-day {
+                font-size: 13px;
+                margin-bottom: 4px;
+            }
+
+            .calendar-attendee {
+                font-size: 10px;
+                margin: 2px 0;
+            }
+
+            .calendar-notice {
+                font-size: 9px;
+                margin-top: 2px;
+            }
+
+            .info-container {
+                padding: 18px;
+            }
+
+            .info-container h2 {
+                font-size: 16px;
+                margin-bottom: 15px;
+            }
+
+            .info-value {
+                font-size: 13px;
+                padding: 8px 10px;
+            }
+
+            .button-group {
+                gap: 8px;
+            }
+
+            .btn-close {
+                padding: 8px 12px;
+                font-size: 13px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .calendar-wrapper {
+                padding: 8px;
+            }
+
+            .calendar th {
+                padding: 8px 2px;
+                font-size: 11px;
+            }
+
+            .calendar td {
+                padding: 6px 2px;
+                min-height: 70px;
+            }
+
+            .calendar-day {
+                font-size: 12px;
+            }
+
+            .month-display {
+                font-size: 14px;
+                min-width: 100px;
             }
         }
     </style>
@@ -364,18 +406,18 @@
     <div class="main-container">
         <!-- 헤더 -->
         <div class="header">
-            <div class="header-top">
+            <div class="header-content">
                 <div class="header-title">
                     <i class="fas fa-calendar-check"></i> 보람교사 현황
                 </div>
-                <div class="month-nav">
-                    <a href="#" onclick="attendee_redirect({{ prev_month }})">
-                        <i class="fas fa-chevron-left"></i> 이전 달
-                    </a>
+                <div class="month-section">
+                    <button class="month-btn" onclick="attendee_redirect({{ prev_month }})">
+                        <i class="fas fa-chevron-left"></i> 이전
+                    </button>
                     <div class="month-display">{{ year }}년 {{ month }}월</div>
-                    <a href="#" onclick="attendee_redirect({{ next_month }})">
-                        다음 달 <i class="fas fa-chevron-right"></i>
-                    </a>
+                    <button class="month-btn" onclick="attendee_redirect({{ next_month }})">
+                        다음 <i class="fas fa-chevron-right"></i>
+                    </button>
                 </div>
                 <a href="/login" class="login-link">
                     <i class="fas fa-sign-in-alt"></i> 관리자 로그인
@@ -404,8 +446,6 @@
                         <td {% if events.date %}data-date="{{ events.date }}" onclick="showInputBox('{{ events.date }}')"{% endif %}>
                             {% if events.day %}
                             <div class="calendar-day">{{ events.day }}</div>
-                            {% else %}
-                            <div class="calendar-empty"></div>
                             {% endif %}
 
                             {% if events.attendee %}
@@ -481,7 +521,7 @@
                             </div>
                         ` : ''}
                         <div class="button-group">
-                            <button class="btn-cancel" onclick="hideInputBox()" style="flex: 1;">
+                            <button class="btn-close" onclick="hideInputBox()" style="flex: 1;">
                                 <i class="fas fa-times"></i> 닫기
                             </button>
                         </div>
