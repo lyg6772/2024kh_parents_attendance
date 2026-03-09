@@ -13,14 +13,7 @@ class DB(SingletonClass):
         super().__init__()
 
     def init_db(self):
-        url = URL.create(
-            drivername="mysql+aiomysql",
-            username=config.DB_USER,
-            password=config.DB_PW,
-            host=config.DB_HOST,
-            port=config.DB_PORT,
-            database=config.DB_DB
-        )
+        url = f'oracle+oracledb://{config.DB_USER}:{config.DB_PW}@{config.ORACLE_CONNECTION_STRING}'
         self.engine = create_async_engine(url)
         self.session_local = sessionmaker(autoflush=True, bind=self.engine, class_=AsyncSession)
 

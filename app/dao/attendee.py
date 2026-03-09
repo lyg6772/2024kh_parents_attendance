@@ -9,8 +9,8 @@ class AttendeeDao:
 
     async def get_attendee(self, start_dt: str, end_dt: str):
         query = text("""
-        SELECT ATDC_DATE, GROUP_CONCAT(ATDE_NAME) AS ATDE_NAME
-        FROM attendance.KY_ATDC_L 
+        SELECT ATDC_DATE, LISTAGG(ATDE_NAME) AS ATDE_NAME
+        FROM KY_ATDC_L 
         WHERE ATDC_DATE >= :start_dt
         AND ATDC_DATE <= :end_dt
         GROUP BY ATDC_DATE
@@ -24,7 +24,7 @@ class AttendeeDao:
     async def get_notice(self, start_dt: str, end_dt: str):
         query = text("""
         SELECT ATDC_DATE, ATDC_NOTICE
-        FROM attendance.KY_ATDC_NOTC_L 
+        FROM KY_ATDC_NOTC_L 
         WHERE ATDC_DATE >= :start_dt
         AND ATDC_DATE <= :end_dt
         """)

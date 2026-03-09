@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Request, Form, Depends
 from fastapi.templating import Jinja2Templates
+from fastapi.responses import RedirectResponse
 from app.service.login import LoginService
 
 
@@ -18,3 +19,9 @@ async def login_post(
         service=Depends(LoginService)
 ):
     return await service.login_post(user_name=username, password=password, request=request)
+
+
+async def logout(request: Request):
+    res = RedirectResponse(url='/attendee')
+    res.delete_cookie(key="token")
+    return res
