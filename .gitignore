@@ -159,5 +159,3 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 .idea/
 
-# AI agent internal dev guide (contains DB schema, route structure - not for public)
-AGENTS.md
