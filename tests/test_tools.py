@@ -65,16 +65,16 @@ class TestArgsSchema:
 
 class TestRegistry:
     # P3-04: REGISTRY에 모든 도구 등록 확인
-    def test_registry_has_five_tools(self):
-        assert len(REGISTRY) == 5
+    def test_registry_has_six_tools(self):
+        assert len(REGISTRY) == 6
 
     def test_registry_tool_names(self):
-        assert set(REGISTRY.keys()) == {"get_attendance", "save_attendance", "export_excel", "navigate_month", "logout"}
+        assert set(REGISTRY.keys()) == {"get_attendance", "save_attendance", "export_excel", "navigate_month", "logout", "get_help"}
 
     # P3-05: registry_to_tools_param이 OpenAI function calling 형식 반환
     def test_tools_param_format(self):
         params = registry_to_tools_param(REGISTRY)
-        assert len(params) == 5
+        assert len(params) == 6
         for item in params:
             assert item["type"] == "function"
             assert "name" in item["function"]

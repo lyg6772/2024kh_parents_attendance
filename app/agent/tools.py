@@ -133,6 +133,22 @@ logout_tool = ToolDefinition(
     handler=_stub,
 )
 
+class HelpArgs(ToolArgs):
+    pass
+
+
+get_help_tool = ToolDefinition(
+    name="get_help",
+    summary="사용 가능한 기능 목록 조회",
+    description=(
+        "현재 제공 가능한 모든 기능의 목록과 설명을 반환한다. "
+        "사용 시점: '도움말', '뭐 할 수 있어?', '기능 알려줘', '사용법', 'help' 등의 요청."
+    ),
+    category=FunctionCategory.READ,
+    args_schema=HelpArgs,
+    handler=_stub,
+)
+
 REGISTRY: dict[str, ToolDefinition] = {
     t.name: t for t in [
         get_attendance_tool,
@@ -140,6 +156,7 @@ REGISTRY: dict[str, ToolDefinition] = {
         export_excel_tool,
         navigate_month_tool,
         logout_tool,
+        get_help_tool,
     ]
 }
 
@@ -169,12 +186,21 @@ def build_registry(session) -> dict[str, ToolDefinition]:
     async def _handle_navigate_month(**kw) -> dict:
         return {"redirect_url": f"/admin/attendee/{kw['yyyymm']}"}
 
+    async def _handle_help(**kw) -> dict:
+        return {
+            "features": [
+                t.summary for t in REGISTRY.values()
+                if t.name != "get_help"
+            ]
+        }
+
     handlers = {
         "get_attendance": lambda **kw: svc.get_attendance_data(session, **kw),
         "save_attendance": lambda **kw: svc.save_attendance(session, **kw),
         "export_excel": lambda **kw: svc.export_attendance(session, **kw),
         "navigate_month": _handle_navigate_month,
         "logout": _handle_logout,
+        "get_help": _handle_help,
     }
 
     return {
