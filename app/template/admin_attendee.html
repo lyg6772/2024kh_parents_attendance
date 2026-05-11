@@ -479,6 +479,235 @@
                 min-width: 100px;
             }
         }
+
+        /* Chatbot UI */
+        .chat-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: #4f63f7;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            cursor: pointer;
+            z-index: 1000;
+            transition: all 0.2s;
+            border: none;
+        }
+
+        .chat-btn:hover {
+            background: #3d4cc4;
+            transform: scale(1.05);
+        }
+
+        .chat-panel {
+            position: fixed;
+            bottom: 100px;
+            right: 30px;
+            width: 350px;
+            height: 500px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+            display: flex;
+            flex-direction: column;
+            z-index: 1000;
+            overflow: hidden;
+            transform: translateY(20px);
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+
+        .chat-panel.active {
+            transform: translateY(0);
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .chat-header {
+            background: #4f63f7;
+            color: white;
+            padding: 15px 20px;
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .chat-header .close-btn {
+            background: none;
+            border: none;
+            color: white;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 15px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            background: #f9faff;
+        }
+
+        .chat-msg {
+            max-width: 80%;
+            padding: 10px 14px;
+            border-radius: 12px;
+            font-size: 14px;
+            line-height: 1.4;
+            word-wrap: break-word;
+        }
+
+        .chat-msg.user {
+            background: #4f63f7;
+            color: white;
+            align-self: flex-end;
+            border-bottom-right-radius: 4px;
+        }
+
+        .chat-msg.assistant {
+            background: white;
+            color: #1a1a1a;
+            align-self: flex-start;
+            border-bottom-left-radius: 4px;
+            border: 1px solid #e8eaef;
+        }
+
+        .chat-msg .loading {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+            height: 20px;
+        }
+
+        .chat-msg .loading span {
+            width: 6px;
+            height: 6px;
+            background: #4f63f7;
+            border-radius: 50%;
+            animation: bounce 1.4s infinite ease-in-out both;
+        }
+
+        .chat-msg .loading span:nth-child(1) { animation-delay: -0.32s; }
+        .chat-msg .loading span:nth-child(2) { animation-delay: -0.16s; }
+
+        @keyframes bounce {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1); }
+        }
+
+        .confirm-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .confirm-actions button {
+            flex: 1;
+            padding: 6px 12px;
+            border-radius: 4px;
+            border: none;
+            font-size: 13px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .btn-confirm {
+            background: #10b981;
+            color: white;
+        }
+
+        .btn-cancel-action {
+            background: #ff6b6b;
+            color: white;
+        }
+
+        .chat-divider {
+            text-align: center;
+            font-size: 11px;
+            color: #aab0c0;
+            padding: 4px 0;
+            position: relative;
+        }
+        .chat-divider::before,
+        .chat-divider::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            width: 30%;
+            height: 1px;
+            background: #dde0e8;
+        }
+        .chat-divider::before { left: 0; }
+        .chat-divider::after { right: 0; }
+
+        .chat-msg.completed {
+            opacity: 0.5;
+        }
+
+        .chat-input-area {
+            padding: 15px;
+            border-top: 1px solid #e8eaef;
+            display: flex;
+            gap: 10px;
+            background: white;
+        }
+
+        .chat-input {
+            flex: 1;
+            padding: 10px 14px;
+            border: 1px solid #e8eaef;
+            border-radius: 20px;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .chat-input:focus {
+            border-color: #4f63f7;
+        }
+
+        .chat-send-btn {
+            background: #4f63f7;
+            color: white;
+            border: none;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .chat-send-btn:hover {
+            background: #3d4cc4;
+        }
+
+        @media (max-width: 480px) {
+            .chat-panel {
+                bottom: 0;
+                right: 0;
+                width: 100%;
+                height: 100vh;
+                border-radius: 0;
+            }
+            .chat-btn {
+                bottom: 20px;
+                right: 20px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -557,6 +786,26 @@
 
         <!-- 입력/정보 표시 영역 -->
         <div id="input-div"></div>
+        
+        <button class="chat-btn" onclick="toggleChat()">
+            <i class="fas fa-comments"></i>
+        </button>
+
+        <div class="chat-panel" id="chat-panel">
+            <div class="chat-header">
+                <div><i class="fas fa-robot"></i> AI 어시스턴트</div>
+                <button class="close-btn" onclick="toggleChat()"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="chat-messages" id="chat-messages">
+                <div class="chat-msg assistant">안녕하세요! 관리자님. 무엇을 도와드릴까요?</div>
+            </div>
+            <div class="chat-input-area">
+                <input type="text" class="chat-input" id="chat-input" placeholder="메시지를 입력하세요..." onkeypress="handleChatKeyPress(event)">
+                <button class="chat-send-btn" onclick="sendChatMessage()">
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -651,6 +900,198 @@
             .catch(error => {
                 console.error('Error:', error);
                 alert("오류가 발생했습니다.");
+            });
+        }
+
+        let chatHistory = [];
+        let currentPendingAction = null;
+
+        function markConversationCompleted() {
+            const msgsDiv = document.getElementById('chat-messages');
+            msgsDiv.querySelectorAll('.chat-msg:not(.completed)').forEach(el => {
+                el.classList.add('completed');
+            });
+            const divider = document.createElement('div');
+            divider.className = 'chat-divider';
+            divider.textContent = '처리 완료';
+            msgsDiv.appendChild(divider);
+            chatHistory = [];
+        }
+
+        function toggleChat() {
+            document.getElementById('chat-panel').classList.toggle('active');
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function linkify(text) {
+            const escaped = escapeHtml(text);
+            return escaped.replace(/(https?:\/\/[^\s]+|\/[\w\-\/.?=&]+)/g, function(url) {
+                return '<a href="' + url + '" target="_blank" style="color:inherit;text-decoration:underline;">' + url + '</a>';
+            });
+        }
+
+        function appendMessage(role, content) {
+            const msgsDiv = document.getElementById('chat-messages');
+            const msgEl = document.createElement('div');
+            msgEl.className = 'chat-msg ' + role;
+            if (role === 'assistant') {
+                msgEl.innerHTML = linkify(content);
+            } else {
+                msgEl.textContent = content;
+            }
+            msgsDiv.appendChild(msgEl);
+            msgsDiv.scrollTop = msgsDiv.scrollHeight;
+            return msgEl;
+        }
+
+        function showLoading() {
+            const msgsDiv = document.getElementById('chat-messages');
+            const msgEl = document.createElement('div');
+            msgEl.className = 'chat-msg assistant loading-msg';
+            msgEl.innerHTML = '<div class="loading"><span></span><span></span><span></span></div>';
+            msgsDiv.appendChild(msgEl);
+            msgsDiv.scrollTop = msgsDiv.scrollHeight;
+            return msgEl;
+        }
+
+        function removeLoading() {
+            const loadingMsg = document.querySelector('.loading-msg');
+            if (loadingMsg) loadingMsg.remove();
+        }
+
+        function renderConfirmation(pending) {
+            const msgsDiv = document.getElementById('chat-messages');
+            const confirmDiv = document.createElement('div');
+            confirmDiv.className = 'chat-msg assistant';
+            
+            const textDiv = document.createElement('div');
+            textDiv.textContent = "작업을 수행할까요?";
+            confirmDiv.appendChild(textDiv);
+
+            const actionsDiv = document.createElement('div');
+            actionsDiv.className = 'confirm-actions';
+            
+            const btnYes = document.createElement('button');
+            btnYes.className = 'btn-confirm';
+            btnYes.innerHTML = '<i class="fas fa-check"></i> 확인';
+            btnYes.onclick = () => confirmAction(true);
+            
+            const btnNo = document.createElement('button');
+            btnNo.className = 'btn-cancel-action';
+            btnNo.innerHTML = '<i class="fas fa-times"></i> 취소';
+            btnNo.onclick = () => confirmAction(false);
+            
+            actionsDiv.appendChild(btnYes);
+            actionsDiv.appendChild(btnNo);
+            confirmDiv.appendChild(actionsDiv);
+            
+            msgsDiv.appendChild(confirmDiv);
+            msgsDiv.scrollTop = msgsDiv.scrollHeight;
+        }
+
+        function handleChatKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendChatMessage();
+            }
+        }
+
+        function sendChatMessage() {
+            const input = document.getElementById('chat-input');
+            const message = input.value.trim();
+            if (!message) return;
+
+            input.value = '';
+            input.disabled = true;
+
+            appendMessage('user', message);
+            chatHistory.push({ role: 'user', content: message });
+
+            showLoading();
+
+            fetch('/agent/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: message, history: chatHistory })
+            })
+            .then(res => res.json())
+            .then(data => {
+                removeLoading();
+                input.disabled = false;
+                input.focus();
+
+                if (data.message) {
+                    appendMessage('assistant', data.message);
+                    chatHistory.push({ role: 'assistant', content: data.message });
+                }
+
+                if (data.redirect) {
+                    if (!data.message) {
+                        appendMessage('assistant', '처리 완료.');
+                    }
+                    markConversationCompleted();
+                    setTimeout(() => window.location.href = data.redirect, 1000);
+                } else if (data.status === 'pending_confirmation' && data.pending) {
+                    currentPendingAction = data.pending;
+                    renderConfirmation(data.pending);
+                } else if (data.status === 'done') {
+                    markConversationCompleted();
+                }
+            })
+            .catch(err => {
+                removeLoading();
+                input.disabled = false;
+                appendMessage('assistant', '오류가 발생했습니다.');
+            });
+        }
+
+        function confirmAction(approved) {
+            if (!currentPendingAction) return;
+
+            const fn_name = currentPendingAction.fn_name;
+            const kwargs = currentPendingAction.kwargs;
+            currentPendingAction = null;
+
+            const actions = document.querySelectorAll('.confirm-actions');
+            actions.forEach(el => el.remove());
+
+            appendMessage('user', approved ? '작업을 승인합니다.' : '작업을 취소합니다.');
+            chatHistory.push({ role: 'user', content: approved ? '작업 승인' : '작업 취소' });
+
+            showLoading();
+            const input = document.getElementById('chat-input');
+            input.disabled = true;
+
+            fetch('/agent/confirm', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fn_name: fn_name, kwargs: kwargs, approved: approved })
+            })
+            .then(res => res.json())
+            .then(data => {
+                removeLoading();
+                input.disabled = false;
+
+                if (data.message) {
+                    appendMessage('assistant', data.message);
+                    chatHistory.push({ role: 'assistant', content: data.message });
+                }
+
+                if (data.status === 'done') {
+                    markConversationCompleted();
+                    if (approved) {
+                        setTimeout(() => window.location.reload(), 1500);
+                    }
+                }
+            })
+            .catch(err => {
+                removeLoading();
+                input.disabled = false;
+                appendMessage('assistant', '오류가 발생했습니다.');
             });
         }
     </script>

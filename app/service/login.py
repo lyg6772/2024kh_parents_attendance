@@ -33,7 +33,12 @@ class LoginService:
             # token 발행
             encoded_token = auth.encode_token(user_id=user_name)
             res = JSONResponse(content={"token": encoded_token})
-            res.set_cookie(key="token", value=encoded_token)
+            res.set_cookie(
+                key="token",
+                value=encoded_token,
+                httponly=True,
+                samesite="lax",
+            )
             return res
         else:
             raise HTTPException(
