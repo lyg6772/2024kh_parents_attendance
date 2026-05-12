@@ -33,6 +33,8 @@ class ConfirmRequest(BaseModel):
     fn_name: str
     kwargs: dict
     approved: bool
+    message: str = ""
+    history: list[dict] = []
 
 
 @agent_router.post("/chat")
@@ -62,7 +64,14 @@ async def confirm(
 ):
     registry = build_registry(session)
     try:
-        result = await engine.confirm(body.fn_name, body.kwargs, body.approved, registry)
+        llm = get_llm() if body.approved else None
+    except NoLLMAvailableError:
+        llm = None
+    try:
+        result = await engine.confirm(
+            body.fn_name, body.kwargs, body.approved, registry,
+            message=body.message, history=body.history, llm=llm,
+        )
     except Exception:
         logger.exception("engine.confirm failed")
         return {"status": "error", "message": "작업 처리 중 오류가 발생했습니다.", "pending": None}

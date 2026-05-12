@@ -144,6 +144,66 @@
 - E2E 우선: 환경 구축 비용 큼, 디버깅 어려움
 - Integration 우선: 순수 함수/엔진 로직 검증이 더 시급
 
+#### DR-007: Confirm 재진입 — continuation prompt 방식 (2025-05-12)
+
+**질문**: WRITE 승인 후 후속 작업(예: 엑셀 출력)을 어떻게 이어갈 것인가?
+
+**결정**: `confirm()` → `run()` 재진입 시 원래 메시지 대신 continuation prompt 사용.
+
+**근거**:
+- `build_messages()`가 `message`를 마지막 user 메시지로 붙이므로, 원래 메시지를 그대로 넘기면 LLM이 새 요청으로 인식 → 같은 WRITE를 반복 호출 → **무한루프**
+- history에 이미 원래 요청이 포함되어 있으므로, 재진입 시에는 "나머지 작업을 진행해주세요"라는 continuation prompt만 전달
+- LLM은 history에서 원래 요청과 완료된 작업을 파악하고, 미처리 작업만 이어서 실행
+
+**기각한 대안**:
+- 원래 메시지 그대로 전달: 무한루프 발생 확인
+- `build_messages()`에서 중복 메시지 감지/제거: 복잡도 증가, 엣지케이스 많음
+
+#### DR-008: Confirm 후 페이지 새로고침 정책 (2025-05-12)
+
+**질문**: WRITE 승인 후 SSR 테이블을 어떻게 갱신할 것인가?
+
+**결정**: confirm 응답의 모든 종료 경로(`done`, `redirect`)에서 auto-reload.
+
+**근거**:
+- `done` + `approved`: WRITE가 실행되었으므로 SSR 테이블이 stale → 2.5초 후 reload
+- `redirect` (파일 다운로드): `Content-Disposition: attachment` 응답은 페이지를 떠나지 않으므로, 다운로드 시작 후 2.5초 뒤 reload하면 SSR 테이블도 갱신
+- 페이지 이동 redirect (navigate_month 등): `window.location.href` 시점에 JS 컨텍스트 파괴 → reload 타이머 자동 취소, 부작용 없음
+
+**기각한 대안**:
+- 수동 새로고침 버튼: 유저에게 추가 동작 요구, UX 저하
+- reload 안 함: SSR 테이블이 stale 상태로 남음
+
+#### DR-009: LLM 어댑터 싱글턴 캐싱 (2025-05-12)
+
+**질문**: `get_llm()`이 매 요청마다 `AsyncGroq()` + `genai.Client()`를 재생성하는 비효율을 어떻게 해결할 것인가?
+
+**결정**: 모듈 레벨 `_llm_instance` 변수로 싱글턴 캐싱. 최초 호출 시 1회 생성, 이후 재사용.
+
+**근거**:
+- `AsyncGroq`/`genai.Client`는 내부에 `httpx.AsyncClient` 기반 connection pool을 생성 — 매번 새로 만들면 커넥션 재활용 불가, GC 부담
+- API 키는 앱 실행 중 변경되지 않으므로 인스턴스 재사용 안전
+- `chat()` 호출 시 `messages`/`tools`를 인자로 받으므로 요청 간 상태 격리 보장 (stateless 전송 계층)
+
+**기각한 대안**:
+- 매 요청 생성 유지: 커넥션 풀 재활용 불가, 요청 증가 시 성능 저하
+- FastAPI `Depends` 캐싱: `get_llm`은 request scope가 아닌 app scope여야 하므로 부적합
+
+#### DR-010: TOOLS_PARAM 모듈 상수 (2025-05-12)
+
+**질문**: `registry_to_tools_param()`이 매 `run()` 호출마다 `model_json_schema()` x6을 재생성하는 비효율을 어떻게 해결할 것인가?
+
+**결정**: `tools.py`에서 `TOOLS_PARAM = registry_to_tools_param(REGISTRY)`를 모듈 로드 시 1회 생성. `engine.run()`에서 상수 참조.
+
+**근거**:
+- `model_json_schema()`는 Pydantic 모델 리플렉션으로 JSON Schema dict 생성 — 결과가 불변
+- `build_registry(session)`은 handler만 교체하고 name/description/schema는 동일 → `tools_param`은 REGISTRY 기준으로 충분
+- 순수 dict/list 상수이므로 동시 읽기 안전 (Python GIL + 불변 데이터)
+
+**기각한 대안**:
+- `ToolDefinition`에 `_cached_schema` 프로퍼티: 각 인스턴스마다 캐시 관리 필요, 복잡도 증가
+- `functools.lru_cache`: dict 입력이 hashable이 아니어서 직접 사용 불가
+
 ---
 
 ## 1. 현재 코드베이스 진단

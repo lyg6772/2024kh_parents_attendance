@@ -189,7 +189,14 @@ class NoLLMAvailableError(Exception):
     pass
 
 
+_llm_instance: LLMAdapter | None = None
+
+
 def get_llm() -> LLMAdapter:
+    global _llm_instance
+    if _llm_instance is not None:
+        return _llm_instance
+
     groq_key = config.GROQ_API_KEY
     gemini_key = config.GEMINI_API_KEY
 
@@ -197,11 +204,14 @@ def get_llm() -> LLMAdapter:
     gemini = GeminiAdapter() if gemini_key else None
 
     if groq and gemini:
-        return FailoverAdapter(groq, gemini)
-    if groq:
-        return groq
-    if gemini:
-        return gemini
-    raise NoLLMAvailableError(
-        "GROQ_API_KEY 또는 GEMINI_API_KEY를 설정해주세요."
-    )
+        _llm_instance = FailoverAdapter(groq, gemini)
+    elif groq:
+        _llm_instance = groq
+    elif gemini:
+        _llm_instance = gemini
+    else:
+        raise NoLLMAvailableError(
+            "GROQ_API_KEY 또는 GEMINI_API_KEY를 설정해주세요."
+        )
+
+    return _llm_instance

@@ -7,7 +7,7 @@ from pydantic import ValidationError
 
 from app.agent.llm import LLMAdapter, LLMResponse, ToolCall
 from app.agent.prompts import build_system_prompt
-from app.agent.tools import FunctionCategory, ToolDefinition, registry_to_tools_param
+from app.agent.tools import FunctionCategory, ToolDefinition, TOOLS_PARAM
 
 MAX_TURNS = 5
 
@@ -75,7 +75,7 @@ async def run(
     registry: dict[str, ToolDefinition],
     llm: LLMAdapter,
 ) -> EngineResult:
-    tools_param = registry_to_tools_param(registry)
+    tools_param = TOOLS_PARAM
     messages = build_messages(message, history, registry)
 
     for turn in range(MAX_TURNS):
@@ -131,6 +131,9 @@ async def confirm(
     kwargs: dict,
     approved: bool,
     registry: dict[str, ToolDefinition],
+    message: str = "",
+    history: list[dict] | None = None,
+    llm: LLMAdapter | None = None,
 ) -> EngineResult:
     if not approved:
         return EngineResult(status="done", message="취소했습니다.")
@@ -138,4 +141,14 @@ async def confirm(
     tool = registry[fn_name]
     validated = tool.args_schema(**kwargs)
     await tool.handler(**validated.model_dump())
-    return EngineResult(status="done", message="저장했습니다.")
+
+    if not message or not llm:
+        return EngineResult(status="done", message="저장했습니다.")
+
+    resume_history = list(history or [])
+    resume_history.append({"role": "assistant", "content": f"{tool.summary} 작업을 완료했습니다."})
+
+    return await run(
+        "위 작업이 완료되었습니다. 원래 요청에서 아직 처리하지 않은 작업이 있으면 진행해주세요.",
+        resume_history, registry, llm,
+    )

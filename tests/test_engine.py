@@ -3,12 +3,12 @@ import pytest
 from app.agent.engine import EngineResult, confirm, run
 from app.agent.llm import LLMAdapter, LLMResponse, ToolCall
 from app.agent.tools import (
+    ExportExcelArgs,
     FunctionCategory,
     GetAttendanceArgs,
     SaveAttendanceArgs,
     ToolArgs,
     ToolDefinition,
-    registry_to_tools_param,
 )
 
 
@@ -44,6 +44,10 @@ async def _fake_write_handler(date: str, attendee: str, notice: str = "") -> dic
     return {"saved": True, "date": date}
 
 
+async def _fake_export_handler(yyyymm: str) -> dict:
+    return {"redirect_url": f"/admin/attendee/export/{yyyymm}"}
+
+
 READ_TOOL = ToolDefinition(
     name="get_attendance",
     summary="조회",
@@ -62,7 +66,16 @@ WRITE_TOOL = ToolDefinition(
     handler=_fake_write_handler,
 )
 
-TEST_REGISTRY = {t.name: t for t in [READ_TOOL, WRITE_TOOL]}
+EXPORT_TOOL = ToolDefinition(
+    name="export_excel",
+    summary="엑셀 다운로드",
+    description="출석부 엑셀 다운로드",
+    category=FunctionCategory.READ,
+    args_schema=ExportExcelArgs,
+    handler=_fake_export_handler,
+)
+
+TEST_REGISTRY = {t.name: t for t in [READ_TOOL, WRITE_TOOL, EXPORT_TOOL]}
 
 
 class TestEngineRun:
@@ -87,24 +100,32 @@ class TestEngineRun:
         assert result.pending["fn_name"] == "save_attendance"
         assert result.pending["kwargs"]["date"] == "20260403"
 
-    # P3-12: Confirmation 승인 시 실행
+    # P3-12: Confirmation 승인 후 후속 작업 없이 완료
     async def test_confirm_approved(self):
+        llm = MockLLM([
+            make_final("저장이 완료되었습니다."),
+        ])
         result = await confirm(
             fn_name="save_attendance",
             kwargs={"date": "20260403", "attendee": "김철수", "notice": ""},
             approved=True,
             registry=TEST_REGISTRY,
+            message="참석자 추가해줘",
+            history=[],
+            llm=llm,
         )
         assert result.status == "done"
-        assert "저장" in result.message
 
-    # P3-13: Confirmation 거부 시 취소
+    # P3-13: Confirmation 거부 시 취소 (루프 재진입 안 함)
     async def test_confirm_rejected(self):
         result = await confirm(
             fn_name="save_attendance",
             kwargs={"date": "20260403", "attendee": "김철수", "notice": ""},
             approved=False,
             registry=TEST_REGISTRY,
+            message="참석자 추가해줘",
+            history=[],
+            llm=None,
         )
         assert result.status == "done"
         assert "취소" in result.message
@@ -157,3 +178,72 @@ class TestEngineRun:
         result = await run("날씨 알려줘", [], TEST_REGISTRY, llm)
         assert result.status == "done"
         assert "지원" in result.message
+
+
+class TestConfirmResume:
+    # C-01: 승인 후 후속 READ 작업 실행 (WRITE → export_excel → redirect)
+    async def test_confirm_then_export(self):
+        llm = MockLLM([
+            make_tool_call("export_excel", {"yyyymm": "202604"}),
+        ])
+        result = await confirm(
+            fn_name="save_attendance",
+            kwargs={"date": "20260403", "attendee": "김철수", "notice": ""},
+            approved=True,
+            registry=TEST_REGISTRY,
+            message="참석자 추가 후 엑셀 출력해줘",
+            history=[],
+            llm=llm,
+        )
+        assert result.status == "done"
+        assert result.redirect == "/admin/attendee/export/202604"
+
+    # C-02: 승인 후 LLM이 후속 작업 없이 바로 final 응답
+    async def test_confirm_no_followup(self):
+        llm = MockLLM([
+            make_final("저장이 완료되었습니다."),
+        ])
+        result = await confirm(
+            fn_name="save_attendance",
+            kwargs={"date": "20260403", "attendee": "김철수", "notice": ""},
+            approved=True,
+            registry=TEST_REGISTRY,
+            message="참석자 추가해줘",
+            history=[],
+            llm=llm,
+        )
+        assert result.status == "done"
+        assert result.redirect is None
+
+    # C-03: 거부 시 루프 재진입 없음
+    async def test_confirm_rejected_no_resume(self):
+        result = await confirm(
+            fn_name="save_attendance",
+            kwargs={"date": "20260403", "attendee": "김철수", "notice": ""},
+            approved=False,
+            registry=TEST_REGISTRY,
+            message="참석자 추가 후 엑셀 출력해줘",
+            history=[],
+            llm=None,
+        )
+        assert result.status == "done"
+        assert "취소" in result.message
+        assert result.redirect is None
+
+    # C-04: 승인 후 두 번째 WRITE 발생 → 다시 pending_confirmation
+    async def test_confirm_then_second_write(self):
+        llm = MockLLM([
+            make_tool_call("save_attendance", {"date": "20260404", "attendee": "이영희"}),
+        ])
+        result = await confirm(
+            fn_name="save_attendance",
+            kwargs={"date": "20260403", "attendee": "김철수", "notice": ""},
+            approved=True,
+            registry=TEST_REGISTRY,
+            message="3일에 김철수, 4일에 이영희 추가해줘",
+            history=[],
+            llm=llm,
+        )
+        assert result.status == "pending_confirmation"
+        assert result.pending["fn_name"] == "save_attendance"
+        assert result.pending["kwargs"]["date"] == "20260404"

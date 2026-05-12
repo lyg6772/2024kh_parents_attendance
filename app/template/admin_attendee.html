@@ -882,9 +882,11 @@
 
         let chatHistory = [];
         let currentPendingAction = null;
+        let currentMessage = '';
 
         function markConversationCompleted() {
             chatHistory = [];
+            currentMessage = '';
         }
 
         function toggleChat() {
@@ -977,6 +979,7 @@
             input.value = '';
             input.disabled = true;
 
+            currentMessage = message;
             appendMessage('user', message);
             chatHistory.push({ role: 'user', content: message });
 
@@ -1038,7 +1041,13 @@
             fetch('/agent/confirm', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ fn_name: fn_name, kwargs: kwargs, approved: approved })
+                body: JSON.stringify({
+                    fn_name: fn_name,
+                    kwargs: kwargs,
+                    approved: approved,
+                    message: currentMessage,
+                    history: chatHistory,
+                })
             })
             .then(res => res.json())
             .then(data => {
@@ -1050,10 +1059,17 @@
                     chatHistory.push({ role: 'assistant', content: data.message });
                 }
 
-                if (data.status === 'done') {
+                if (data.redirect) {
+                    markConversationCompleted();
+                    setTimeout(() => window.location.href = data.redirect, 1000);
+                    setTimeout(() => window.location.reload(), 2500);
+                } else if (data.status === 'pending_confirmation' && data.pending) {
+                    currentPendingAction = data.pending;
+                    renderConfirmation(data.pending);
+                } else if (data.status === 'done') {
                     markConversationCompleted();
                     if (approved) {
-                        setTimeout(() => window.location.reload(), 1500);
+                        setTimeout(() => window.location.reload(), 2500);
                     }
                 }
             })

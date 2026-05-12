@@ -12,7 +12,7 @@ def create_app():
 
     DB().init_db()
 
-    if config.DB_URL and "sqlite" in config.DB_URL:
+    if config.DB_URL and "sqlite" in config.DB_URL and "local" in config.DB_URL:
         @app.on_event("startup")
         async def _create_tables():
             await DB().create_tables()

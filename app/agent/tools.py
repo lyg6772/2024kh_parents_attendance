@@ -175,6 +175,9 @@ def registry_to_tools_param(registry: dict[str, ToolDefinition]) -> list[dict]:
     ]
 
 
+TOOLS_PARAM: list[dict] = registry_to_tools_param(REGISTRY)
+
+
 def build_registry(session) -> dict[str, ToolDefinition]:
     from dataclasses import replace
 
