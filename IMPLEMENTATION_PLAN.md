@@ -204,6 +204,26 @@
 - `ToolDefinition`에 `_cached_schema` 프로퍼티: 각 인스턴스마다 캐시 관리 필요, 복잡도 증가
 - `functools.lru_cache`: dict 입력이 hashable이 아니어서 직접 사용 불가
 
+#### DR-011: 토큰 절약 — 시스템 프롬프트 도구 목록 제거 + description 압축 (2025-05-12)
+
+**질문**: 매 LLM 호출마다 토큰 소비를 줄일 수 있는가?
+
+**결정**: 3가지 동시 적용.
+1. 시스템 프롬프트에서 `## 사용 가능한 도구` 섹션 제거
+2. 각 tool의 description에서 "사용 시점" trigger 예시 삭제, 핵심 동작 지시만 유지
+3. `registry_to_tools_param`에서 `f"{summary}\n{description}"` → `description`만 사용
+
+**근거**:
+- `tools` 파라미터가 LLM에 도구 정보를 전달하는 정식 채널. 시스템 프롬프트의 도구 목록은 100% 중복 → ~400토큰 낭비
+- "사용 시점: '엑셀로 뽑아줘', '엑셀 다운로드'..." 같은 trigger 예시는 함수 이름 + 간결한 description만으로 충분히 매핑 가능
+- `f"{summary}\n{description}"`에서 summary는 description의 요약이므로 중복
+
+**영향**: 매 호출 ~500토큰 절약. `build_system_prompt()` 시그니처 단순화 (registry 파라미터 제거).
+
+**기각한 대안**:
+- 시스템 프롬프트에 도구 목록 유지 (안전성): 도구 6개로 소규모, 중복 제거해도 선택 정확도 저하 무시 가능
+- description 유지하고 trigger만 제거: 부분 개선이지만, 이왕 정리하는 김에 전체 압축이 효과적
+
 ---
 
 ## 1. 현재 코드베이스 진단

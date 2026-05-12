@@ -23,11 +23,9 @@ class EngineResult:
 def build_messages(
     message: str,
     history: list[dict],
-    registry: dict[str, ToolDefinition],
 ) -> list[dict]:
     system = build_system_prompt(
         today=date.today().isoformat(),
-        registry=registry,
     )
     return [
         {"role": "system", "content": system},
@@ -76,7 +74,7 @@ async def run(
     llm: LLMAdapter,
 ) -> EngineResult:
     tools_param = TOOLS_PARAM
-    messages = build_messages(message, history, registry)
+    messages = build_messages(message, history)
 
     for turn in range(MAX_TURNS):
         response = await llm.chat(messages, tools=tools_param)
