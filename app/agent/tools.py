@@ -22,6 +22,7 @@ class ToolDefinition:
     category: FunctionCategory
     args_schema: Type[ToolArgs]
     handler: Callable[..., Awaitable[dict]]
+    preview: Callable[..., Awaitable[dict]] | None = None
 
 
 class GetAttendanceArgs(ToolArgs):
@@ -44,6 +45,11 @@ class SaveAttendanceArgs(ToolArgs):
     notice: str | None = Field(
         default=None,
         description="특이사항. 미지정 시 기존 값 유지.",
+    )
+    mode: str = Field(
+        default="add",
+        description="참석자 수정 모드. add: 기존 명단에 추가, remove: 기존 명단에서 제거, set: 명단 전체 교체.",
+        examples=["add", "remove", "set"],
     )
 
 
@@ -83,8 +89,8 @@ save_attendance_tool = ToolDefinition(
     summary="특정 날짜 참석자/특이사항 저장",
     description=(
         "지정 날짜(YYYYMMDD)의 참석자 또는 특이사항을 저장한다. "
-        "부분 수정 가능: attendee만 보내면 참석자만, notice만 보내면 특이사항만 업데이트. "
-        "전제조건: 호출 전 get_attendance로 해당 월 현황을 먼저 조회할 것."
+        "mode별 동작: add=기존 명단에 추가(기본값), remove=기존 명단에서 제거, set=명단 전체 교체. "
+        "부분 수정 가능: attendee만 보내면 참석자만, notice만 보내면 특이사항만 업데이트."
     ),
     category=FunctionCategory.WRITE,
     args_schema=SaveAttendanceArgs,
@@ -179,6 +185,48 @@ def build_registry(session) -> dict[str, ToolDefinition]:
             ]
         }
 
+    async def _preview_save_attendance(**kw) -> dict:
+        from app.dao.functions import get_attendees, get_notices
+
+        date = kw["date"]
+        attendees_raw = await get_attendees(session, date, date)
+        notices_raw = await get_notices(session, date, date)
+
+        current_attendee = attendees_raw[0]["atde_name"] if attendees_raw else ""
+        current_notice = notices_raw[0]["atdc_notice"] if notices_raw else ""
+
+        new_attendee = kw.get("attendee")
+        new_notice = kw.get("notice")
+
+        date_display = f"{date[:4]}년 {int(date[4:6])}월 {int(date[6:])}일"
+
+        items = []
+        if new_attendee is not None:
+            existing_names = {n.strip() for n in current_attendee.split(",") if n.strip()} if current_attendee else set()
+            input_names = {n.strip() for n in new_attendee.split(",") if n.strip()}
+
+            mode = kw.get("mode", "add")
+            if mode == "remove":
+                result_names = existing_names - input_names
+            elif mode == "set":
+                result_names = input_names
+            else:
+                result_names = existing_names | input_names
+
+            items.append({
+                "label": "참석자",
+                "current": current_attendee or "(없음)",
+                "new": ", ".join(sorted(result_names)) or "(없음)",
+            })
+        if new_notice is not None:
+            items.append({
+                "label": "특이사항",
+                "current": current_notice or "(없음)",
+                "new": new_notice or "(없음)",
+            })
+
+        return {"date_display": date_display, "items": items}
+
     handlers = {
         "get_attendance": lambda **kw: svc.get_attendance_data(session, **kw),
         "save_attendance": lambda **kw: svc.save_attendance(session, **kw),
@@ -188,7 +236,11 @@ def build_registry(session) -> dict[str, ToolDefinition]:
         "get_help": _handle_help,
     }
 
+    previews = {
+        "save_attendance": _preview_save_attendance,
+    }
+
     return {
-        name: replace(tool, handler=handlers[name])
+        name: replace(tool, handler=handlers[name], preview=previews.get(name))
         for name, tool in REGISTRY.items()
     }

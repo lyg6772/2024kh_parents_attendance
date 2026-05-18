@@ -99,10 +99,21 @@ async def run(
             continue
 
         if tool.category == FunctionCategory.WRITE:
+            preview = None
+            if tool.preview:
+                try:
+                    preview = await tool.preview(**validated.model_dump())
+                except Exception:
+                    pass
+
             return EngineResult(
                 status="pending_confirmation",
                 message=response.content or "",
-                pending={"fn_name": tool_call.name, "kwargs": validated.model_dump()},
+                pending={
+                    "fn_name": tool_call.name,
+                    "kwargs": validated.model_dump(),
+                    "preview": preview,
+                },
             )
 
         try:
@@ -140,13 +151,9 @@ async def confirm(
     validated = tool.args_schema(**kwargs)
     await tool.handler(**validated.model_dump())
 
-    if not message or not llm:
-        return EngineResult(status="done", message="저장했습니다.")
+    redirect = None
+    kw = validated.model_dump()
+    if "date" in kw:
+        redirect = f"/admin/attendee/{kw['date'][:6]}"
 
-    resume_history = list(history or [])
-    resume_history.append({"role": "assistant", "content": f"{tool.summary} 작업을 완료했습니다."})
-
-    return await run(
-        "위 작업이 완료되었습니다. 원래 요청에서 아직 처리하지 않은 작업이 있으면 진행해주세요.",
-        resume_history, registry, llm,
-    )
+    return EngineResult(status="done", message="저장했습니다.", redirect=redirect)
