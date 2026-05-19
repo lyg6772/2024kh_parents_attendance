@@ -42,10 +42,21 @@ class TestArgsSchema:
         assert args.date == "20260403"
         assert args.attendee == "김철수,이영희"
         assert args.notice is None
+        assert args.mode == "add"
 
     def test_save_attendance_with_notice(self):
         args = SaveAttendanceArgs(date="20260403", attendee="김철수", notice="비 옴")
         assert args.notice == "비 옴"
+
+    def test_save_attendance_mode_values(self):
+        for mode in ("add", "remove", "set"):
+            args = SaveAttendanceArgs(date="20260403", attendee="김철수", mode=mode)
+            assert args.mode == mode
+
+    def test_save_attendance_mode_in_schema(self):
+        schema = SaveAttendanceArgs.model_json_schema()
+        assert "mode" in schema["properties"]
+        assert schema["properties"]["mode"]["default"] == "add"
 
     # P3-03: 잘못된 인자로 ValidationError 발생
     def test_save_attendance_missing_required(self):

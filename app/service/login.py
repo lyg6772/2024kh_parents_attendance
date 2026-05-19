@@ -15,22 +15,22 @@ class LoginService:
         self.dao = dao
 
     async def login_template(self, request: Request):
-        # 이미 토큰이 있으면 관리자 페이지로 바로 이동
         token = request.cookies.get("token", '')
         if token:
             try:
                 user_id = auth.decode_token(token)
                 if user_id:
                     return RedirectResponse(url='/admin/attendee', status_code=302)
-            except:
+            except Exception:
                 pass
 
         return templates.TemplateResponse("login.html", {"request": request})
 
     async def login_post(self, user_name, password, request):
         hashed_password = await self.dao.get_password(user_name)
+        if not hashed_password:
+            raise HTTPException(status_code=401, detail="Login Failure")
         if pwd_context.verify(password, hashed_password):
-            # token 발행
             encoded_token = auth.encode_token(user_id=user_name)
             res = JSONResponse(content={"token": encoded_token})
             res.set_cookie(

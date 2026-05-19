@@ -4,6 +4,14 @@ from app.dao.functions import get_attendees, get_notices, save_attendees, save_n
 from app.service.attendance_logic import build_calendar_context, parse_date_range
 
 
+def apply_mode(existing: set[str], incoming: set[str], mode: str) -> set[str]:
+    if mode == "remove":
+        return existing - incoming
+    elif mode == "set":
+        return incoming
+    return existing | incoming
+
+
 async def get_attendance_data(session: AsyncSession, yyyymm: str) -> dict:
     dr = parse_date_range(yyyymm)
     attendees_raw = await get_attendees(session, dr.start_dt, dr.end_dt)
@@ -40,13 +48,7 @@ async def save_attendance(
             existing_names = {n.strip() for n in existing_raw[0]["atde_name"].split(",") if n.strip()}
 
         input_names = {name.strip() for name in attendee.split(",") if name.strip()}
-
-        if mode == "remove":
-            result_names = existing_names - input_names
-        elif mode == "set":
-            result_names = input_names
-        else:
-            result_names = existing_names | input_names
+        result_names = apply_mode(existing_names, input_names, mode)
 
         merged = sorted(result_names)
         await save_attendees(session, date, merged)

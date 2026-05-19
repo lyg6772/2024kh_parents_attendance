@@ -8,6 +8,8 @@ DB_URL = os.environ.get("DB_URL", "")
 DB_USER = os.environ.get("DB_USER", '')
 DB_PW = os.environ.get("DB_PW", '')
 SECRET_SALT = os.environ.get("SECRET_SALT", '')
+if not SECRET_SALT:
+    raise RuntimeError("SECRET_SALT 환경변수가 설정되지 않았습니다. app/.env를 확인하세요.")
 ACCESS_TOKEN_EXPIRE_HOURS = int(os.environ.get("ACCESS_TOKEN_EXPIRE_HOURS", 8))
 ORACLE_CONNECTION_STRING = os.environ.get("ORACLE_CONNECTION_STRING", '')
 

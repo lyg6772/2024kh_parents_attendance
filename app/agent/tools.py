@@ -187,6 +187,7 @@ def build_registry(session) -> dict[str, ToolDefinition]:
 
     async def _preview_save_attendance(**kw) -> dict:
         from app.dao.functions import get_attendees, get_notices
+        from app.service.attendance_data import apply_mode
 
         date = kw["date"]
         attendees_raw = await get_attendees(session, date, date)
@@ -204,14 +205,7 @@ def build_registry(session) -> dict[str, ToolDefinition]:
         if new_attendee is not None:
             existing_names = {n.strip() for n in current_attendee.split(",") if n.strip()} if current_attendee else set()
             input_names = {n.strip() for n in new_attendee.split(",") if n.strip()}
-
-            mode = kw.get("mode", "add")
-            if mode == "remove":
-                result_names = existing_names - input_names
-            elif mode == "set":
-                result_names = input_names
-            else:
-                result_names = existing_names | input_names
+            result_names = apply_mode(existing_names, input_names, kw.get("mode", "add"))
 
             items.append({
                 "label": "참석자",

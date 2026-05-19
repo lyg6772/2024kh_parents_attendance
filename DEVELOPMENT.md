@@ -40,7 +40,7 @@ controller  →  service  →  DAO  →  DB
 |---|---|---|
 | `controller/` | HTTP 요청/응답, 인증 체크, Depends 주입 | 비즈니스 로직, DB 직접 접근 |
 | `service/` | 비즈니스 로직, 템플릿 렌더링, DAO 조합 | 직접 DB 세션 사용 |
-| `dao/` | SQLAlchemy `text()` 쿼리 실행 | 비즈니스 로직, HTTP 응답 |
+| `dao/` | SQLAlchemy ORM select/delete/insert 실행 | 비즈니스 로직, HTTP 응답 |
 
 - controller에서 DAO를 직접 호출하지 않는다.
 - service에서 `session.execute()`를 직접 쓰지 않는다.
@@ -100,27 +100,47 @@ await session.commit()
 
 ## 3. 테스트 전략
 
-현재 테스트 없음. 신규 기능부터 아래 기준을 적용한다.
-
-### 테스트 스택 (추가 예정)
+### 테스트 스택
 ```toml
-# pyproject.toml에 추가
-pytest = "*"
-pytest-asyncio = "*"
-httpx = "*"          # FastAPI 비동기 테스트용
+# pyproject.toml
+pytest = "^8.0"
+pytest-asyncio = "^0.23"
+httpx = "^0.27"
+aiosqlite = "^0.20"
 ```
 
 ### 테스트 위치
 ```
 tests/
-  test_attendee.py   # 공개 출석 조회
-  test_admin.py      # 관리자 CRUD
-  test_login.py      # 인증
+  conftest.py              # db_session fixture (SQLite in-memory)
+  test_dao.py              # DAO CRUD 단위 테스트
+  test_attendance_logic.py # 캘린더/날짜 파싱 순수 로직
+  test_attendance_data.py  # save_attendance mode(add/remove/set) + preview
+  test_engine.py           # engine.run() 루프 + confirm() 흐름
+  test_tools.py            # Args schema 검증 + registry 구조
+  test_failover.py         # LLM failover 전략
 ```
 
-### 비동기 엔드포인트 테스트 패턴
+### 실행
+```bash
+poetry run pytest tests/ -v
+```
+
+### 비동기 테스트 패턴
 ```python
-import pytest
+# conftest.py — SQLite in-memory로 Oracle 의존 제거
+@pytest.fixture
+async def db_session():
+    engine = create_async_engine("sqlite+aiosqlite://", echo=False)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    async with async_session() as session:
+        yield session
+```
+
+### 엔드포인트 통합 테스트 (필요 시)
+```python
 from httpx import AsyncClient, ASGITransport
 from app.main import app
 
@@ -130,10 +150,6 @@ async def test_attendee_get():
         response = await ac.get("/attendee")
     assert response.status_code == 200
 ```
-
-### DAO 단위 테스트
-- Oracle 연결이 필요한 DAO 테스트는 별도 표시: `@pytest.mark.integration`
-- 로컬에서 실행 시 `app/.env` 필요.
 
 ---
 
@@ -166,84 +182,61 @@ test: AdminAttendeeService post_attendee 단위 테스트 추가
 
 ---
 
-## 5. LLM 에이전트 통합 설계 방향
+## 5. LLM 에이전트 구현
 
-### 목표
-사용자가 자연어로 지시 → LLM이 의도 파악 → 기존 API 자동 호출.  
-현재 SSR 화면은 그대로 두고, LLM 에이전트 인터페이스를 **레이어로 추가**하는 방식.
-
-### 설계 방향
-
-**1단계: JSON API 엔드포인트 정비**
-
-현재 POST `/admin/attendee`는 이미 JSON API. 나머지 GET 엔드포인트들은 HTML을 반환함.  
-LLM tool-calling용 JSON API를 별도 prefix로 추가:
+### 구조
+기존 SSR 화면 위에 `app/agent/` 레이어를 추가. SSR과 독립적으로 동작.
 
 ```
-GET  /api/attendee/{YYYYMM}     → JSON 반환 (출석 현황 조회)
-GET  /api/admin/attendee/{YYYYMM} → JSON 반환 (관리자 조회)
-POST /api/admin/attendee        → 기존 동일 (이미 JSON)
+app/agent/
+  router.py    # /agent/chat, /agent/confirm 엔드포인트
+  engine.py    # run() — LLM ↔ tool 루프, confirm() — 승인/거부 처리
+  tools.py     # ToolDefinition, Args schema, build_registry()
+  llm.py       # LLMAdapter 추상 + Groq/Gemini/Failover 구현
+  prompts.py   # 시스템 프롬프트 빌더
 ```
 
-**2단계: 인증 방식 전환 검토**
+### 인증
+기존 쿠키 JWT 공유. `/agent/*` 엔드포인트도 `get_current_user` 사용.
 
-현재: httpOnly 쿠키 JWT → 브라우저에서만 동작  
-LLM agent: API Key 또는 Bearer 토큰 방식이 적합
+### LLM
+- Primary: Groq (`llama-3.3-70b-versatile`)
+- Fallback: Gemini (`gemini-2.5-flash`)
+- `FailoverAdapter`: Groq rate limit 시 자동 전환
+
+### 도구 (6개)
+
+| 이름 | 카테고리 | 설명 |
+|---|---|---|
+| `get_attendance` | READ | 월별 출석 현황 조회 |
+| `save_attendance` | WRITE | 날짜별 참석자/특이사항 저장 (mode: add/remove/set) |
+| `export_excel` | READ | 월별 Excel 다운로드 (redirect) |
+| `navigate_month` | READ | 월 페이지 이동 (redirect) |
+| `logout` | READ | 로그아웃 (redirect) |
+| `get_help` | READ | 기능 목록 반환 |
+
+### 엔진 동작
+
+1. `run(message, history, registry, llm)` — MAX_TURNS=5 루프
+   - LLM 응답이 tool_call이면 → READ: 즉시 실행, WRITE: confirmation gate
+   - WRITE 도구에 preview 핸들러 있으면 before→after 미리보기 생성
+   - redirect_url 반환 시 즉시 done+redirect
+   - handler 예외 시 에러 메시지 → LLM에 전달 → 루프 계속
+
+2. `confirm(fn_name, kwargs, approved, registry)` — 승인/거부
+   - approved=True: handler 실행 → done + redirect (date 기반)
+   - approved=False: "취소했습니다" 반환
+   - handler 예외 시: error 반환 (500 방지)
+
+### save_attendance mode 로직
 
 ```python
-# 기존 쿠키 인증과 공존 가능한 패턴
-async def get_current_user(request: Request):
-    # API Key 헤더 우선, 없으면 쿠키 fallback
-    api_key = request.headers.get("X-API-Key")
-    if api_key:
-        return verify_api_key(api_key)
-    token = request.cookies.get("token", '')
-    return auth_handler.decode_token(token)
+from app.service.attendance_data import apply_mode
+
+# apply_mode(existing: set, incoming: set, mode: str) -> set
+# "add":    existing | incoming  (기본값)
+# "remove": existing - incoming
+# "set":    incoming (전체 교체)
 ```
 
-**3단계: LLM Tool 정의**
-
-에이전트가 호출할 수 있는 tool 목록 (function calling 형식):
-
-```python
-tools = [
-    {
-        "name": "get_attendance",
-        "description": "특정 월의 보람교사 출석 현황을 조회한다",
-        "parameters": {
-            "yyyymm": "조회할 월 (예: 202604)"
-        }
-    },
-    {
-        "name": "save_attendance",
-        "description": "특정 날짜의 참석자 명단과 특이사항을 저장한다",
-        "parameters": {
-            "date": "날짜 YYYYMMDD",
-            "attendee": "참석자 쉼표 구분 문자열",
-            "notice": "특이사항 (선택)"
-        }
-    },
-    {
-        "name": "export_excel",
-        "description": "특정 월의 출석 현황을 Excel로 다운로드한다",
-        "parameters": {
-            "yyyymm": "대상 월 (예: 202604)"
-        }
-    }
-]
-```
-
-**LLM 날짜 파싱 주의사항**
-
-LLM이 "이번 달", "4월" 등 자연어 날짜를 입력할 수 있음.  
-`YYYYMM`/`YYYYMMDD` 변환 로직을 에이전트 레이어에서 처리 (service 레이어 오염 방지).
-
-### 파일 구조 (통합 시 예상)
-```
-app/
-  agent/
-    tools.py       # LLM tool 정의 및 실행 라우팅
-    router.py      # /agent 엔드포인트
-  api/
-    attendee.py    # JSON API 핸들러 (SSR과 별개)
-```
+preview와 실제 저장이 동일한 `apply_mode` 함수를 공유하여 일관성 보장.

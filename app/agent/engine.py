@@ -149,7 +149,11 @@ async def confirm(
 
     tool = registry[fn_name]
     validated = tool.args_schema(**kwargs)
-    await tool.handler(**validated.model_dump())
+
+    try:
+        await tool.handler(**validated.model_dump())
+    except Exception:
+        return EngineResult(status="error", message="저장 실패: 잠시 후 다시 시도해주세요.")
 
     redirect = None
     kw = validated.model_dump()
