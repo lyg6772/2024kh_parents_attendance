@@ -73,6 +73,22 @@ class TestArgsSchema:
         with pytest.raises(ValidationError):
             GetAttendanceArgs()
 
+    # pattern 검증: 잘못된 형식은 핸들러 전에 ValidationError → LLM 자가수정 유도
+    def test_get_attendance_rejects_bad_yyyymm(self):
+        for bad in ("2026-04", "20264", "abcdef", "2026044"):
+            with pytest.raises(ValidationError):
+                GetAttendanceArgs(yyyymm=bad)
+
+    def test_save_attendance_rejects_bad_date(self):
+        for bad in ("2026-04-03", "202604", "20260403x"):
+            with pytest.raises(ValidationError):
+                SaveAttendanceArgs(date=bad)
+
+    # Literal 검증: 지원하지 않는 mode는 조용히 add로 흡수되지 않고 거부됨
+    def test_save_attendance_rejects_invalid_mode(self):
+        with pytest.raises(ValidationError):
+            SaveAttendanceArgs(date="20260403", attendee="김철수", mode="delete")
+
 
 class TestRegistry:
     # P3-04: REGISTRY에 모든 도구 등록 확인

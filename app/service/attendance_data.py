@@ -12,6 +12,15 @@ def apply_mode(existing: set[str], incoming: set[str], mode: str) -> set[str]:
     return existing | incoming
 
 
+async def get_day_state(session: AsyncSession, date: str) -> tuple[str, str]:
+    """특정 날짜(YYYYMMDD)의 현재 참석자/특이사항 문자열. 단일 날짜 조회(preview 등)용."""
+    attendees_raw = await get_attendees(session, date, date)
+    notices_raw = await get_notices(session, date, date)
+    current_attendee = attendees_raw[0]["atde_name"] if attendees_raw else ""
+    current_notice = notices_raw[0]["atdc_notice"] if notices_raw else ""
+    return current_attendee, current_notice
+
+
 async def get_attendance_data(session: AsyncSession, yyyymm: str) -> dict:
     dr = parse_date_range(yyyymm)
     attendees_raw = await get_attendees(session, dr.start_dt, dr.end_dt)

@@ -98,7 +98,11 @@ class GeminiAdapter(LLMAdapter):
             config=types.GenerateContentConfig(**config_kwargs) if config_kwargs else None,
         )
 
-        parts = resp.candidates[0].content.parts or []  # type: ignore[index]
+        # 안전필터/프롬프트 차단 시 candidates가 비거나 content가 None일 수 있다.
+        if not resp.candidates:
+            return LLMResponse(content="응답을 생성할 수 없습니다. 잠시 후 다시 시도해주세요.")
+        candidate = resp.candidates[0]
+        parts = (candidate.content.parts if candidate.content else None) or []
 
         tool_calls = []
         text = None
@@ -119,12 +123,18 @@ class GeminiAdapter(LLMAdapter):
         if tool_calls:
             return LLMResponse(content=None, tool_calls=tool_calls)
 
+        # content가 None(안전차단 등)이면 빈 말풍선 대신 안내 문구
+        if text is None:
+            return LLMResponse(content="응답을 생성할 수 없습니다. 잠시 후 다시 시도해주세요.")
         return LLMResponse(content=text)
 
 
 def _openai_messages_to_gemini(messages: list[dict]) -> list[dict]:
     contents = []
     system_parts = []
+    # Gemini는 function_response.name이 앞선 function_call.name과 일치해야 한다.
+    # tool 메시지엔 이름이 없고 tool_call_id만 있으므로, assistant 턴에서 id→name을 모아둔다.
+    tool_id_to_name: dict[str, str] = {}
 
     for msg in messages:
         role = msg["role"]
@@ -137,30 +147,34 @@ def _openai_messages_to_gemini(messages: list[dict]) -> list[dict]:
             system_parts = []
             contents.append({"role": "user", "parts": [{"text": prefix + (content or "")}]})
         elif role == "assistant":
-            if msg.get("tool_calls"):
-                tc = msg["tool_calls"][0]
-                fn = tc["function"]
-                args = json.loads(fn["arguments"]) if isinstance(fn["arguments"], str) else fn["arguments"]
-                contents.append({
-                    "role": "model",
-                    "parts": [{"function_call": {"name": fn["name"], "args": args}}],
-                })
+            tool_calls = msg.get("tool_calls")
+            if tool_calls:
+                parts = []
+                for tc in tool_calls:
+                    fn = tc["function"]
+                    args = json.loads(fn["arguments"]) if isinstance(fn["arguments"], str) else fn["arguments"]
+                    tool_id_to_name[tc["id"]] = fn["name"]
+                    parts.append({"function_call": {"name": fn["name"], "args": args}})
+                contents.append({"role": "model", "parts": parts})
             else:
                 contents.append({"role": "model", "parts": [{"text": content or ""}]})
         elif role == "tool":
             tool_content = msg.get("content", "{}")
             result = json.loads(tool_content) if isinstance(tool_content, str) else tool_content
+            fn_name = tool_id_to_name.get(msg.get("tool_call_id", ""), "tool")
             contents.append({
                 "role": "user",
-                "parts": [{"function_response": {"name": "tool", "response": result}}],
+                "parts": [{"function_response": {"name": fn_name, "response": result}}],
             })
 
     return contents
 
 
 def _strip_unsupported_keys(schema: dict) -> dict:
-    """Gemini function declaration에서 지원하지 않는 키를 재귀적으로 제거한다."""
-    unsupported = {"examples", "default", "$defs", "title"}
+    """Gemini function declaration에서 지원하지 않는 키를 재귀적으로 제거한다.
+    pattern도 제외 — Gemini 선언 스키마가 거부할 수 있고, 실제 검증은 pydantic이 하므로
+    Gemini에 힌트가 없어도 자가수정 루프는 그대로 작동한다."""
+    unsupported = {"examples", "default", "$defs", "title", "pattern"}
     cleaned: dict = {}
     for k, v in schema.items():
         if k in unsupported:

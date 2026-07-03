@@ -1,27 +1,18 @@
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent import engine
 from app.agent.llm import NoLLMAvailableError, get_llm
 from app.agent.tools import build_registry
-from app.util.auth import AuthHandler
+from app.util.auth import get_current_user as _get_current_user
 from app.util.db import get_session
 
 logger = logging.getLogger(__name__)
 
 agent_router = APIRouter(prefix="/agent", tags=["agent"])
-auth_handler = AuthHandler()
-
-
-def _get_current_user(request: Request) -> str:
-    token = request.cookies.get("token", "")
-    user_id = auth_handler.decode_token(token)
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Could not validate credentials")
-    return user_id
 
 
 class ChatRequest(BaseModel):

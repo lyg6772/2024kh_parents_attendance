@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from app.util.db import DB
 from app.controller.router import router
@@ -8,15 +9,16 @@ from app import config
 
 
 def create_app():
-    app = FastAPI()
-
-    DB().init_db()
-
-    if config.DB_URL and "sqlite" in config.DB_URL and "local" in config.DB_URL:
-        @app.on_event("startup")
-        async def _create_tables():
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        if config.DB_URL and "sqlite" in config.DB_URL and "local" in config.DB_URL:
             await DB().create_tables()
             await _seed_admin_user()
+        yield
+
+    app = FastAPI(lifespan=lifespan)
+
+    DB().init_db()
 
     app.include_router(router)
     app.include_router(agent_router)

@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum
-from typing import Awaitable, Callable, Type
+from typing import Awaitable, Callable, Literal, Type
 
 from pydantic import BaseModel, Field
 
@@ -27,6 +27,7 @@ class ToolDefinition:
 
 class GetAttendanceArgs(ToolArgs):
     yyyymm: str = Field(
+        pattern=r"^\d{6}$",
         description="조회할 월. YYYYMM 형식.",
         examples=["202604"],
     )
@@ -34,6 +35,7 @@ class GetAttendanceArgs(ToolArgs):
 
 class SaveAttendanceArgs(ToolArgs):
     date: str = Field(
+        pattern=r"^\d{8}$",
         description="날짜. YYYYMMDD 형식.",
         examples=["20260403"],
     )
@@ -46,7 +48,7 @@ class SaveAttendanceArgs(ToolArgs):
         default=None,
         description="특이사항. 미지정 시 기존 값 유지.",
     )
-    mode: str = Field(
+    mode: Literal["add", "remove", "set"] = Field(
         default="add",
         description="참석자 수정 모드. add: 기존 명단에 추가, remove: 기존 명단에서 제거, set: 명단 전체 교체.",
         examples=["add", "remove", "set"],
@@ -55,6 +57,7 @@ class SaveAttendanceArgs(ToolArgs):
 
 class ExportExcelArgs(ToolArgs):
     yyyymm: str = Field(
+        pattern=r"^\d{6}$",
         description="대상 월. YYYYMM 형식.",
         examples=["202604"],
     )
@@ -62,6 +65,7 @@ class ExportExcelArgs(ToolArgs):
 
 class NavigateMonthArgs(ToolArgs):
     yyyymm: str = Field(
+        pattern=r"^\d{6}$",
         description="이동할 월. YYYYMM 형식.",
         examples=["202604"],
     )
@@ -186,15 +190,10 @@ def build_registry(session) -> dict[str, ToolDefinition]:
         }
 
     async def _preview_save_attendance(**kw) -> dict:
-        from app.dao.functions import get_attendees, get_notices
-        from app.service.attendance_data import apply_mode
+        from app.service.attendance_data import apply_mode, get_day_state
 
         date = kw["date"]
-        attendees_raw = await get_attendees(session, date, date)
-        notices_raw = await get_notices(session, date, date)
-
-        current_attendee = attendees_raw[0]["atde_name"] if attendees_raw else ""
-        current_notice = notices_raw[0]["atdc_notice"] if notices_raw else ""
+        current_attendee, current_notice = await get_day_state(session, date)
 
         new_attendee = kw.get("attendee")
         new_notice = kw.get("notice")

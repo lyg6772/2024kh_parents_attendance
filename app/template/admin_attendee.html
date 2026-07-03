@@ -900,7 +900,8 @@
         function linkify(text) {
             const escaped = escapeHtml(text);
             return escaped.replace(/(https?:\/\/[^\s]+|\/[\w\-\/.?=&]+)/g, function(url) {
-                return '<a href="' + url + '" target="_blank" style="color:inherit;text-decoration:underline;">' + url + '</a>';
+                const safeHref = url.replace(/"/g, '%22');
+                return '<a href="' + safeHref + '" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:underline;">' + url + '</a>';
             });
         }
 
