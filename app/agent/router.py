@@ -33,8 +33,7 @@ class ConfirmRequest(BaseModel):
     fn_name: str
     kwargs: dict
     approved: bool
-    message: str = ""
-    history: list[dict] = []
+    queue: list[dict] = []
 
 
 @agent_router.post("/chat")
@@ -64,13 +63,8 @@ async def confirm(
 ):
     registry = build_registry(session)
     try:
-        llm = get_llm() if body.approved else None
-    except NoLLMAvailableError:
-        llm = None
-    try:
         result = await engine.confirm(
-            body.fn_name, body.kwargs, body.approved, registry,
-            message=body.message, history=body.history, llm=llm,
+            body.fn_name, body.kwargs, body.approved, registry, queue=body.queue,
         )
     except Exception:
         logger.exception("engine.confirm failed")

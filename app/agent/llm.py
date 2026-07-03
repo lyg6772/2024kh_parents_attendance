@@ -1,7 +1,7 @@
 import json
 import logging
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from app import config
 
@@ -17,9 +17,9 @@ class ToolCall:
 
 @dataclass
 class LLMResponse:
-    is_final: bool
     content: str | None
-    tool_call: ToolCall | None
+    tool_calls: list[ToolCall] = field(default_factory=list)
+    # tool_calls가 비면 최종 응답, 있으면 (하나 이상의) 도구 호출.
 
 
 class LLMAdapter(ABC):
@@ -58,15 +58,21 @@ class GroqAdapter(LLMAdapter):
         msg = resp.choices[0].message
 
         if msg.tool_calls:
-            tc = msg.tool_calls[0]
-            args = json.loads(tc.function.arguments) if isinstance(tc.function.arguments, str) else tc.function.arguments
-            return LLMResponse(
-                is_final=False,
-                content=msg.content,
-                tool_call=ToolCall(id=tc.id, name=tc.function.name, arguments=args),
-            )
+            tool_calls = [
+                ToolCall(
+                    id=tc.id,
+                    name=tc.function.name,
+                    arguments=(
+                        json.loads(tc.function.arguments)
+                        if isinstance(tc.function.arguments, str)
+                        else tc.function.arguments
+                    ),
+                )
+                for tc in msg.tool_calls
+            ]
+            return LLMResponse(content=msg.content, tool_calls=tool_calls)
 
-        return LLMResponse(is_final=True, content=msg.content, tool_call=None)
+        return LLMResponse(content=msg.content)
 
 
 class GeminiAdapter(LLMAdapter):
@@ -92,21 +98,28 @@ class GeminiAdapter(LLMAdapter):
             config=types.GenerateContentConfig(**config_kwargs) if config_kwargs else None,
         )
 
-        part = resp.candidates[0].content.parts[0]  # type: ignore[index]
+        parts = resp.candidates[0].content.parts or []  # type: ignore[index]
 
-        if part.function_call:
-            fc = part.function_call
-            return LLMResponse(
-                is_final=False,
-                content=None,
-                tool_call=ToolCall(
-                    id=f"gemini_{fc.name}",
-                    name=fc.name or "",
-                    arguments=dict(fc.args) if fc.args else {},
-                ),
-            )
+        tool_calls = []
+        text = None
+        for i, part in enumerate(parts):
+            fc = getattr(part, "function_call", None)
+            if fc:
+                # 인덱스를 id에 포함 — 같은 함수를 병렬로 두 번 부르면 이름만으론 id가 충돌한다.
+                tool_calls.append(
+                    ToolCall(
+                        id=f"gemini_{i}_{fc.name}",
+                        name=fc.name or "",
+                        arguments=dict(fc.args) if fc.args else {},
+                    )
+                )
+            elif getattr(part, "text", None):
+                text = part.text
 
-        return LLMResponse(is_final=True, content=part.text, tool_call=None)
+        if tool_calls:
+            return LLMResponse(content=None, tool_calls=tool_calls)
+
+        return LLMResponse(content=text)
 
 
 def _openai_messages_to_gemini(messages: list[dict]) -> list[dict]:

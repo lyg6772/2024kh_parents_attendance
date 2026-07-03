@@ -34,7 +34,7 @@ class FakeFallback(LLMAdapter):
         return self._response
 
 
-FINAL_RESPONSE = LLMResponse(is_final=True, content="응답", tool_call=None)
+FINAL_RESPONSE = LLMResponse(content="응답")
 
 
 class TestFailoverAdapter:

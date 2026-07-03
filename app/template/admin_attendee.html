@@ -882,11 +882,9 @@
 
         let chatHistory = [];
         let currentPendingAction = null;
-        let currentMessage = '';
 
         function markConversationCompleted() {
             chatHistory = [];
-            currentMessage = '';
         }
 
         function toggleChat() {
@@ -996,7 +994,6 @@
             input.value = '';
             input.disabled = true;
 
-            currentMessage = message;
             appendMessage('user', message);
             chatHistory.push({ role: 'user', content: message });
 
@@ -1043,6 +1040,7 @@
 
             const fn_name = currentPendingAction.fn_name;
             const kwargs = currentPendingAction.kwargs;
+            const queue = currentPendingAction.queue || [];
             currentPendingAction = null;
 
             const actions = document.querySelectorAll('.confirm-actions');
@@ -1062,8 +1060,7 @@
                     fn_name: fn_name,
                     kwargs: kwargs,
                     approved: approved,
-                    message: currentMessage,
-                    history: chatHistory,
+                    queue: queue,
                 })
             })
             .then(res => res.json())
