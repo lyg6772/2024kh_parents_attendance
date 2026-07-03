@@ -162,3 +162,10 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 .idea/
 
+# CodeGraph 인덱스 캐시 (로컬 도구, 커밋 안 함)
+.codegraph/
+
+# 개인 학습/면접 대비 노트 (public repo 노출 방지 — 디스크에는 유지)
+ENGINE_GUIDE.md
+MCP_GUIDE.md
+
