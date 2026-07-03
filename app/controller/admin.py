@@ -1,25 +1,15 @@
-from fastapi import Request, Depends, HTTPException
+from fastapi import Request, Depends
 from starlette.responses import StreamingResponse
 from urllib.parse import quote
 from app.service.admin import AdminAttendeeService
 from fastapi.templating import Jinja2Templates
 from datetime import datetime, timezone
-from app.util.auth import AuthHandler
+from app.util.auth import get_current_user
 from fastapi.security import OAuth2PasswordBearer
 
 templates = Jinja2Templates(directory="./template")
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
-auth_handler = AuthHandler()
-
-
-async def get_current_user(request: Request):
-    token = request.cookies.get("token", '')
-    user_id = auth_handler.decode_token(token)
-
-    if not user_id:
-        raise HTTPException(status_code=401, detail='Could not validate credentials')
-    return user_id
 
 
 async def admin_attendee_get_default(

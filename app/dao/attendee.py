@@ -1,6 +1,7 @@
 from app.util.db import DB
 from fastapi import Depends
-from sqlalchemy import text
+
+from app.dao import functions as dao_fn
 
 
 class AttendeeDao:
@@ -8,28 +9,9 @@ class AttendeeDao:
         self.session = db_session
 
     async def get_attendee(self, start_dt: str, end_dt: str):
-        query = text("""
-        SELECT ATDC_DATE, LISTAGG(ATDE_NAME, ',') WITHIN GROUP (ORDER BY ATDE_NAME) AS ATDE_NAME
-        FROM KY_ATDC_L 
-        WHERE ATDC_DATE >= :start_dt
-        AND ATDC_DATE <= :end_dt
-        GROUP BY ATDC_DATE
-        """)
-        data = {"start_dt": start_dt, "end_dt": end_dt}
         async with self.session as session:
-            result = await session.execute(query, data)
-            response = result.mappings().all()
-            return response
+            return await dao_fn.get_attendees(session, start_dt, end_dt)
 
     async def get_notice(self, start_dt: str, end_dt: str):
-        query = text("""
-        SELECT ATDC_DATE, ATDC_NOTICE
-        FROM KY_ATDC_NOTC_L 
-        WHERE ATDC_DATE >= :start_dt
-        AND ATDC_DATE <= :end_dt
-        """)
-        data = {"start_dt": start_dt, "end_dt": end_dt}
         async with self.session as session:
-            result = await session.execute(query, data)
-            response = result.mappings().all()
-            return response
+            return await dao_fn.get_notices(session, start_dt, end_dt)

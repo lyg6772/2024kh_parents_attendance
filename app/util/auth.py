@@ -3,7 +3,7 @@ from app import config
 
 from datetime import datetime, timedelta, timezone
 import jwt
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 
 
 
@@ -32,3 +32,15 @@ class AuthHandler:
             raise HTTPException(status_code=401, detail='Signature has expired')
         except jwt.InvalidTokenError as e:
             raise HTTPException(status_code=401, detail='Invalid token')
+
+
+_auth_handler = AuthHandler()
+
+
+def get_current_user(request: Request) -> str:
+    """쿠키 JWT에서 user_id를 꺼내는 공용 인증 의존성. controller/agent 라우터 공용."""
+    token = request.cookies.get("token", "")
+    user_id = _auth_handler.decode_token(token)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Could not validate credentials")
+    return user_id
