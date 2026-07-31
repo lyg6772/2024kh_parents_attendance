@@ -43,7 +43,7 @@ tests/             pytest, conftest.py 가 aiosqlite 인메모리 세션 픽스�
 | 포맷 | `poetry run ruff format --check --diff .` | **부채 있음** — 아래 "린트 부채" |
 | 타입 | `poetry run pyright app` | **부채 있음** — 아래 "린트 부채" |
 | 테스트 | `poetry run pytest -q` | `testpaths = ["tests"]`, `asyncio_mode = "auto"` |
-| e2e | *(미정)* | 앱 실기동 경로가 아직 정의되지 않았다 |
+| e2e | `python run_app.py` 로 실기동 후 수동 확인 | 자동화된 e2e 스위트는 없다 — stage-6 은 수동 확인 결과를 기록한다 |
 | 커버리지 | *(없음)* | 커버리지 도구 미설치 → **stage-6 §2-2 는 N/A 로 하강한다** |
 
 ## 테스트 규약
@@ -66,7 +66,8 @@ tests/             pytest, conftest.py 가 aiosqlite 인메모리 세션 픽스�
 
 ```bash
 poetry run ruff check app          # 앱 코드만
-poetry run ruff check .            # 하네스 포함 (tests/harness 는 커널 사본이다)
+poetry run ruff check .            # 앱 + 앱 자신의 tests/ (tests/harness 는
+                                   # [tool.ruff] exclude 로 빠져 있다)
 poetry run pyright app
 ```
 
@@ -91,9 +92,13 @@ poetry run pyright app
 
 ## 의존성 CVE 부채 (init 시점 실측, 2026-07-31)
 
-13패키지 74건(고유 취약점 39건, Critical 2)이 `osv-scanner.toml` 에 사유와 함께
-등재돼 있다. **등재된 건만 조용하고 새로 들어오는 취약 의존성은 pre-push 에서
-그대로 막힌다** — 린트 부채를 비차단으로 내린 것과 같은 모양이다.
+설치 시점의 기존 취약점이 `osv-scanner.toml` 에 사유와 함께 등재돼 있다.
+**등재된 건만 조용하고 새로 들어오는 취약 의존성은 pre-push 에서 그대로 막힌다** —
+린트 부채를 비차단으로 내린 것과 같은 모양이다.
+
+건수는 여기 적지 않는다(린트와 같은 이유 — 위 "린트 부채" 절). 현재 값은
+`osv-scanner --recursive .` 로 재측정하고, 등재 목록 자체는 `osv-scanner.toml` 이
+소유한다.
 
 지금 올리지 않은 이유와 해소 순서는 `osv-scanner.toml` 머리말이 소유한다. 한 줄
 요약: **이 레포의 테스트가 그 6개 패키지를 하나도 실행하지 않아 오라클이 없다.**
@@ -118,5 +123,8 @@ pyright 지적의 상당수는 SQLAlchemy async 세션 타이핑 artifact 다 (`
 - **alembic 마이그레이션 없음** → `30-migration.sh` 스킵
 - **uv 아님(poetry)** → `40-supply-chain.sh` 의 PyPI 이름 환각 가드 스킵.
   의존성 CVE 스캔은 `osv-scanner` 가 생태계 무관으로 덮는다
-- **CI 없음** → process-audit 은 로컬 실행에만 의존한다
+- **GitHub 워크플로우 없음** → 커널 문서 여러 곳이 "CI 의 process-audit" 이라고
+  부르는 백스톱을 `.pre-commit-config.yaml` 의 pre-push 훅으로 옮겨 배선했다.
+  실제로 돌지만 **서버측 강제력은 없다** — 훅을 지운 사람은 우회할 수 있고, 그
+  층은 PR 리뷰가 대신한다. 문서에서 "CI" 라고 읽히는 곳은 이 훅으로 해석한다
 - **커버리지 도구 없음** → 신규 코드 커버리지 게이트는 N/A

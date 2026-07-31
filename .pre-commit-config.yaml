@@ -115,6 +115,21 @@ repos:
         always_run: true
         stages: [pre-push]
 
+      # 커널 문서 여러 곳(workflow.md · 04-test-generation.md · team-policy.md ·
+      # 07-review.md · QUICKSTART.md)이 "CI 의 process-audit 이 LOCK 윈도우와
+      # override 를 서버측에서 감사한다"고 말한다. 이 레포는 GitHub 워크플로우를
+      # 두지 않기로 했으므로, 그 백스톱을 pre-push 로 옮겨 실제로 돌게 한다 —
+      # 배선하지 않으면 감사가 존재한다고 광고만 하고 아무 데서도 안 도는 상태가
+      # 된다 (게이트 실측 지적). 로컬 실행이라 서버측 강제력은 없다: 훅을 지운
+      # 사람은 우회할 수 있고, 그 층은 PR 리뷰가 대신한다.
+      - id: process-audit
+        name: process-audit (파이프라인 준수 감사)
+        entry: sh scripts/process_audit.sh
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
       - id: pr-review-gate
         name: pr-review-gate (LLM final-diff review)
         entry: sh scripts/pr_review_gate.sh
