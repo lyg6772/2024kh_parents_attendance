@@ -1,0 +1,152 @@
+default_stages: [pre-commit]
+
+# moru 하네스 훅 체인. 두 층으로 읽는다:
+#   - 보안 바닥(gitleaks / lockfile-no-credentials / semgrep / osv-scanner)은
+#     언어 무관 커널이라 스택에 상관없이 그대로 온다. 바꾸지 않는다.
+#   - 품질 도구(ruff / pyright / 락파일)는 이 레포의 인스턴스라 스택에 맞게 바뀐다.
+#     이 레포는 poetry 이므로 모든 python 도구가 `poetry run` 을 거친다
+#     (.venv/bin 이 PATH 에 없다 — 실측 2026-07-31).
+repos:
+  - repo: local
+    hooks:
+      # --- 품질: 이 스택의 인스턴스 ---
+
+      # 비차단(`|| true` + verbose): init 시점 기존 코드에 ruff 75건이 걸려 있어
+      # 차단으로 걸면 무관한 부채가 모든 커밋을 막는다. 스테이징된 파일만 보므로
+      # 건드린 파일의 지적만 뜬다. 부채가 정리되면 `|| true` 를 떼는 것이 이 훅을
+      # 차단으로 올리는 방법이다. (--fix 를 쓰지 않는다: 비차단인데 자동 수정하면
+      # 스테이징 안 된 수정이 남아 커밋 내용과 트리가 어긋난다.)
+      - id: ruff
+        name: ruff (report-only — 부채 정리 후 차단으로)
+        entry: sh -c 'poetry run ruff check "$@" || true' --
+        language: system
+        types: [python]
+        verbose: true
+
+      # ruff-format 과 pyright 훅은 일부러 없다. 포맷 미적용 22파일 · pyright 25건이
+      # 매 커밋마다 그대로 다시 출력돼 신호가 죽는다 (실측 2026-07-31). 설정은
+      # pyproject.toml 에 있으니 `poetry run ruff format .` / `poetry run pyright app`
+      # 로 언제든 돌릴 수 있고, 부채가 0 이 되는 시점에 차단 훅으로 추가한다.
+
+      - id: poetry-lock
+        name: poetry-lock (pyproject 와 poetry.lock 동기)
+        entry: poetry check --lock
+        language: system
+        files: ^(pyproject\.toml|poetry\.lock)$
+        pass_filenames: false
+
+      # --- 보안 바닥: 언어 무관, 그대로 유지 ---
+
+      # gitleaks 의 짝. allowlist 로 스캔에서 뺀 .env 계열이 git 에 들어가는 것을
+      # 파일명만 보고 결정적으로 막는다 — 엔트로피 휴리스틱보다 강하다.
+      # 스캐너가 놓칠 수 있는 저엔트로피 비밀(짧은 비밀번호, 내부 URL)도 여기서 걸린다.
+      # `! ... | grep` 이므로 매치가 없을 때 성공한다.
+      - id: no-env-files
+        name: no-env-files (.env 계열은 커밋될 수 없다)
+        entry: sh -c '! git diff --cached --name-only --diff-filter=d | grep -E "(^|/)\.env($|\.)"'
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: gitleaks
+        name: gitleaks (secret scan — any file type)
+        # `dir .` 는 워킹트리 파일을 스캔하므로 로컬(pre-commit)과 CI(--all-files)
+        # 양쪽에서 같은 뜻을 갖는다 — `protect --staged` 와 달리. 그 대가로 .gitignore
+        # 를 보지 않아 로컬 .env 에 상시 red 가 뜨므로, .gitleaks.toml 이 그 경로를
+        # allowlist 하고 위 no-env-files 훅이 그 구멍을 막는다.
+        entry: gitleaks dir . --config .gitleaks.toml --redact --no-banner
+        language: system
+        pass_filenames: false
+
+      - id: lockfile-no-credentials
+        name: lockfile-no-credentials
+        # gitleaks 의 엔트로피 규칙이 놓치는 결정적 결함: 락파일 안의 `user:pass@`.
+        entry: sh -c '! grep -nE "[a-z][a-z0-9+.-]*://[^/:@[:space:]]+:[^/@[:space:]]+@" "$@"' --
+        language: system
+        files: (^|/)(uv\.lock|poetry\.lock|Pipfile\.lock|package-lock\.json|pnpm-lock\.yaml|yarn\.lock|Cargo\.lock|go\.sum|Gemfile\.lock|composer\.lock)$
+
+      - id: test-lock
+        name: test-lock
+        entry: sh scripts/test_lock_check.sh
+        language: system
+        files: ^tests/
+        pass_filenames: false
+
+      - id: junk-comments
+        name: junk-comments
+        entry: >-
+          sh -c 'grep -nE "#[[:space:]]*(tmp|TEMP|scratch|REMOVE ME)\b|breakpoint\(\)|pdb\.set_trace\(\)" "$@"; [ $? -eq 1 ]' --
+        language: system
+        types: [text]
+        stages: [pre-commit]
+        exclude: ^(\.pre-commit-config\.yaml|scripts/pr_review_gate\.sh)$
+
+      - id: shell-syntax
+        name: shell-syntax (sh -n on every shell file)
+        # 파서는 shebang 이 정한다 — bash 전용 파일에 sh -n 을 돌리면 유효한 문법이
+        # dash 에서 깨져 커밋이 막힌다.
+        entry: >-
+          sh -c 'rc=0; for f in "$@"; do
+            case $(head -n 1 "$f") in
+              *bash*) bash -n "$f" || rc=1 ;;
+              *zsh*)  command -v zsh >/dev/null 2>&1 && { zsh -n "$f" || rc=1; } ;;
+              *)      sh -n "$f" || rc=1 ;;
+            esac
+          done; exit $rc' --
+        language: system
+        types: [shell]
+        stages: [pre-commit, pre-push]
+
+      - id: protect-default-branch
+        name: protect-default-branch (no direct default-branch push)
+        entry: sh scripts/protect_default_branch.sh
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
+      - id: pr-body-template
+        name: pr-body-template (PR body must use the repo template)
+        # 템플릿 없음 / gh 없음 / 열린 PR 없음 = no-op.
+        entry: sh scripts/pr_body_check.sh
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
+      - id: pr-review-gate
+        name: pr-review-gate (LLM final-diff review)
+        entry: sh scripts/pr_review_gate.sh
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
+      - id: pytest
+        name: pytest (affected — 전체는 수동/CI)
+        # 러너를 명시적으로 넘긴다: 스크립트 기본값은 맨 `pytest` 인데 이 레포에서는
+        # PATH 에 없다. tests/harness 는 골든 테스트라 느려서 전체 실행에서 뺀다.
+        entry: >-
+          env FULL_SUITE_CMD='poetry run pytest -q --ignore=tests/harness'
+              AFFECTED_RUNNER_CMD='poetry run pytest -q'
+              sh scripts/test_affected.sh
+        language: system
+        always_run: true
+        pass_filenames: false
+        stages: [pre-push]
+
+      - id: semgrep
+        name: semgrep (SAST — multi-language)
+        entry: semgrep --config p/security-audit --config p/owasp-top-ten --error --metrics off --quiet .
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+
+      - id: osv-scanner
+        name: osv-scanner (dependency CVEs — all ecosystems)
+        # poetry.lock 을 포함해 지원 락파일을 자동 탐색한다. 네트워크를 쓰므로 pre-push.
+        entry: osv-scanner --recursive .
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]

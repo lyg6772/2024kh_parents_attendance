@@ -1,0 +1,20 @@
+# gitleaks 설정. 기본 룰셋을 그대로 상속하고 allowlist 만 얹는다.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "git 이 절대 받지 않는 로컬 전용 파일 — 스캔 대상이 아니다"
+# 훅은 `gitleaks dir .` 로 돌기 때문에 워킹트리 파일을 읽는다 (.gitignore 를 보지
+# 않는다). 그 형태는 로컬 pre-commit 과 CI 의 --all-files 양쪽에서 같은 뜻을 갖게
+# 하려고 고른 것이라 그대로 둔다. 대신, git 에 들어갈 수 없는 파일을 스캔해서 생기는
+# 상시 red 를 여기서 없앤다 — 실측 2026-07-31, 이 레포의 app/.env 가 커밋을 막았고
+# 그 파일은 .gitignore 에 있으며 히스토리 커밋 0회였다.
+#
+# 이 allowlist 는 단독으로는 구멍이다: 누가 .gitignore 에서 .env 를 빼거나
+# `git add -f app/.env` 를 하면 스캐너가 침묵한다. 그 경로는 확률적 스캔이 아니라
+# .pre-commit-config.yaml 의 `no-env-files` 훅이 파일명만 보고 결정적으로 막는다.
+# 둘은 한 쌍이다 — 하나를 지우려면 다른 하나도 같이 판단해야 한다.
+paths = [
+  '''(^|/)\.env$''',
+  '''(^|/)\.env\.[^/]*$''',
+]

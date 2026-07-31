@@ -32,10 +32,45 @@ pytest = "^8.0"
 pytest-asyncio = "^0.23"
 httpx = "^0.27"
 aiosqlite = "^0.20"
+ruff = "^0.16.1"
+pyright = "^1.1.411"
+pre-commit = "^4.6.1"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+
+[tool.ruff]
+# 기존 코드에 부채가 있는 상태로 도입했다. 훅은 비차단이고, 게이트는 stage-6
+# 검증이 잡는다 — 자세한 건수는 .agents/context/codebase-conventions.md.
+target-version = "py312"
+line-length = 100
+exclude = ["app/template", ".venv", "tests/harness"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "C4", "DTZ", "S", "BLE", "PL", "RUF"]
+ignore = [
+  "E501",     # line-length 는 formatter 가 소유한다
+  "S101",     # assert - 테스트가 쓴다
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S", "PL"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI 의 의존성 주입 관용구. 이게 없으면 B008 이 19건 뜨는데 전부 오탐이다
+# (실측 2026-07-31) — 규칙을 끄지 않고 호출만 면제해 진짜 B008 은 계속 잡는다.
+extend-immutable-calls = [
+  "fastapi.Depends", "fastapi.Query", "fastapi.Path", "fastapi.Body",
+  "fastapi.Header", "fastapi.Cookie", "fastapi.Form", "fastapi.File",
+  "fastapi.Security",
+]
+
+[tool.pyright]
+include = ["app"]
+exclude = ["**/__pycache__", ".venv", "app/template"]
+pythonVersion = "3.12"
+typeCheckingMode = "basic"
 
 [build-system]
 requires = ["poetry-core"]
