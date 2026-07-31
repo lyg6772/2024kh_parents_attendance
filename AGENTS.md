@@ -161,13 +161,15 @@ await session.commit()
 ### Quick commands
 
 ```bash
-poetry run pytest -q            # 테스트
-poetry run ruff check .         # 린트 (init 시점 부채 75건 — 훅에 비차단으로 물림)
-poetry run ruff format .        # 포맷
-poetry run pyright app          # 타입 (init 시점 부채 25건)
+poetry run pytest -q                     # 테스트 (tests/harness 는 기본 수집에서 빠진다)
+poetry run ruff check .                  # 린트 — 기존 부채 있음, 훅에 비차단으로 물림
+poetry run ruff format --check --diff .  # 포맷 — 검사만. 재작성하지 않는다
+poetry run pyright app                   # 타입 — 기존 부채 있음
 ```
 
-레포별 검증 축과 부채 실측은 `.agents/context/codebase-conventions.md` 가 소유한다.
+레포별 검증 축과 부채는 `.agents/context/codebase-conventions.md` 가 소유한다.
+**부채 건수를 여기 옮겨 적지 않는다** — 규칙 선택과 검사 범위에 따라 움직이는
+값이라 복제하면 조용히 낡는다. 숫자가 필요하면 위 명령을 돌린다.
 
 ### 하드 규칙
 
