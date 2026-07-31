@@ -68,6 +68,17 @@ tests/             pytest, conftest.py 가 aiosqlite 인메모리 세션 픽스�
 | `DTZ*` naive datetime | 6 | 검토 대상 |
 | `S110` try-except-pass | 2 | 검토 대상 |
 
+## 의존성 CVE 부채 (init 시점 실측, 2026-07-31)
+
+13패키지 74건(고유 취약점 39건, Critical 2)이 `osv-scanner.toml` 에 사유와 함께
+등재돼 있다. **등재된 건만 조용하고 새로 들어오는 취약 의존성은 pre-push 에서
+그대로 막힌다** — 린트 부채를 비차단으로 내린 것과 같은 모양이다.
+
+지금 올리지 않은 이유와 해소 순서는 `osv-scanner.toml` 머리말이 소유한다. 한 줄
+요약: **이 레포의 테스트가 그 6개 패키지를 하나도 실행하지 않아 오라클이 없다.**
+
+## 타입 부채 메모
+
 pyright 25건 중 상당수는 SQLAlchemy async 세션 타이핑 artifact 다
 (`Session` 이 `__aenter__` 를 노출하지 않음) — 라이브러리 스텁 문제이지 코드 결함이
 아니다. 부채 정리는 `refactor/` 브랜치의 별도 과제이고, `.agents/context/debt.md`
