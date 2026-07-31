@@ -77,6 +77,15 @@ tests/             pytest, conftest.py 가 aiosqlite 인메모리 세션 픽스�
 지금 올리지 않은 이유와 해소 순서는 `osv-scanner.toml` 머리말이 소유한다. 한 줄
 요약: **이 레포의 테스트가 그 6개 패키지를 하나도 실행하지 않아 오라클이 없다.**
 
+## SAST 부채 (init 시점 실측, 2026-07-31)
+
+semgrep 지적 **1건**: `Dockerfile` 에 `USER` 지시가 없어 컨테이너가 root 로 돈다
+(`dockerfile.security.missing-user`). 훅은 기본 브랜치와의 merge-base 를 기준선으로
+써서 이 건을 아래로 내리고 **이 브랜치가 새로 만든 지적만** 막는다.
+
+고치려면 `USER` 를 추가하면 되지만 컨테이너 안 파일 권한이 바뀌어 앱이 깨질 수
+있다 — 실기동으로 확인해야 하는 변경이라 하네스 설치 PR 의 범위 밖이다. 후속 과제.
+
 ## 타입 부채 메모
 
 pyright 25건 중 상당수는 SQLAlchemy async 세션 타이핑 artifact 다

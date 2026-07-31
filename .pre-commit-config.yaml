@@ -136,8 +136,17 @@ repos:
         stages: [pre-push]
 
       - id: semgrep
-        name: semgrep (SAST — multi-language)
-        entry: semgrep --config p/security-audit --config p/owasp-top-ten --error --metrics off --quiet .
+        name: semgrep (SAST — 이 브랜치가 새로 만든 것만)
+        # osv-scanner.toml 과 같은 결정: 설치 시점의 기존 지적(Dockerfile 의
+        # missing-user 1건)은 기준선 아래로 내리고, 이 브랜치가 **새로** 만든
+        # 지적만 막는다. 기준선은 기본 브랜치와의 merge-base 라 브랜치마다 정확하다.
+        # merge-base 를 못 구하면 전체 스캔으로 떨어진다 — fail-closed 방향이다.
+        # 기존 지적은 .agents/context/codebase-conventions.md 가 기록한다.
+        entry: >-
+          sh -c 'base=$(git merge-base HEAD origin/master 2>/dev/null);
+            set -- --config p/security-audit --config p/owasp-top-ten --error --metrics off --quiet;
+            if [ -n "$base" ]; then set -- "$@" --baseline-commit "$base"; fi;
+            semgrep "$@" .'
         language: system
         pass_filenames: false
         stages: [pre-push]

@@ -57,8 +57,18 @@ PKG_ECOSYSTEM="python-poetry"
 # 명령은 줄바꿈 구분, 각 줄이 sh -c 로 실행된다. 가볍게 유지 (매 편집 턴 실행됨).
 #
 # 실측 2026-07-31 (init 시점): 기존 코드에 ruff 75건 · pyright 25건이 걸려 있다.
-# 그 상태로 여기 넣으면 매 턴 같은 100건이 뜨고 신호가 죽으므로, 편집한 파일만
-# 보는 ruff 만 둔다. pyright 는 부채가 정리된 뒤 추가한다.
-STOP_VALIDATE_CMDS="poetry run ruff check --quiet ."
+# 그 상태로 명령을 넣으면 매 턴 같은 100건이 뜨고 신호가 죽는다. 그리고 훅은
+# 편집한 파일 목록을 명령에 넘기지 않으므로(stop_validate.sh 는 sh -c "$cmd" 만
+# 실행한다) "편집한 파일만 검사"는 여기서 표현할 수 없다 — 전부 아니면 전무다.
+#
+# 더 나쁜 것은 그 실패가 남기는 흔적이다: stop_validate 가 .stop-validate-failed
+# 를 쓰고, pr_review_gate.sh 가 그 마커를 보면 같은 명령을 재실행해 여전히 빨간
+# 것을 확인하고 푸시를 막는다. 부채가 있는 상태에서 여기를 채우면 모든 푸시가
+# 영구히 차단된다.
+#
+# 그래서 비워 둔다 (훅 전체 no-op). 편집 파일 단위 린트는 pre-commit 의 ruff 훅이
+# 이미 커버한다 — 잃는 것은 턴 종료 조기경보뿐이다. 부채가 0 이 되면 여기에
+# `poetry run ruff check --quiet .` 를 넣는 것이 이 노브를 켜는 방법이다.
+STOP_VALIDATE_CMDS=""
 # dirty 마커에 기록할 파일 확장자 (기본: 주요 코드 확장자)
 DIRTY_EXT_RE='\.py$'
