@@ -33,10 +33,16 @@ HIGH_RISK_PATH_RE="^app/util/auth\.py$|^app/util/db\.py$|^app/config\.py$"
 # recorded line, and the cost of adding it late is a missed gate.
 HIGH_RISK_CONTENT_RE="^\+[^+].*(payment|billing|invoice|refund|card_number|결제|환불|카드번호|주민등록)"
 
-# ORM 모델은 dao/tables.py 한 파일에 모여 있어 디렉토리가 아니다. 디렉토리를
-# 요구하는 검사이므로 비워 선언적으로 스킵한다 - 잘못된 경로를 적으면 그 검사가
-# 조용히 아무것도 안 잡는다.
-MODELS_DIR=""
+# ORM 모델은 app/dao/tables.py 한 파일이고 전용 디렉토리가 없다. 처음엔 "디렉토리가
+# 없으니 비워서 선언적으로 스킵" 으로 뒀는데, 그 선택의 결과가 더 나쁘다: lib.sh 가
+# `grep -q "^$MODELS_DIR/"` 로 DB 스키마 게이트를 도출하므로 빈 값은 영구 no-op 이고,
+# 이 레포의 ORM 실체를 바꾸는 feat 브랜치가 스키마 게이트를 하나도 안 건드린다 —
+# 조용히 통과하는 방향이라 "선언적 스킵" 이라는 이름과 실제가 다르다.
+#
+# app/dao 로 켠다. 접두사 매치라 tables.py 가 잡히고, 대가는 같은 디렉토리의 쿼리
+# 변경까지 게이트에 걸리는 노이즈다. ORM 정의와 쿼리가 한 디렉토리에 있는 한 그
+# 노이즈는 이 레포의 구조가 지불하는 값이고, 놓친 스키마 변경보다 싸다.
+MODELS_DIR="app/dao"
 # alembic 없음 - 30-migration.sh 의 선형 히스토리 검사가 선언적으로 스킵된다
 MIGRATIONS_DIR=""
 SETTINGS_RE="^app/config\.py$"
