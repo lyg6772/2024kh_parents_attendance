@@ -1,4 +1,10 @@
 default_stages: [pre-commit]
+# 이 설정의 게이트 대부분(process-audit · pr-review-gate · pytest · semgrep ·
+# osv-scanner · protect-default-branch · pr-body-template)이 pre-push 스테이지다.
+# 선언하지 않으면 맨 `pre-commit install` 이 pre-commit 훅만 깔고 그 일곱 개가
+# 통째로 잠든다 — 설치한 사람은 "훅이 있다"고 믿는데 실제로는 없는, 조용한
+# fail-open 이다. 신규 클론이 한 번의 `pre-commit install` 로 전부 받게 한다.
+default_install_hook_types: [pre-commit, pre-push]
 
 # moru 하네스 훅 체인. 두 층으로 읽는다:
 #   - 보안 바닥(gitleaks / lockfile-no-credentials / semgrep / osv-scanner)은
@@ -122,9 +128,18 @@ repos:
       # 배선하지 않으면 감사가 존재한다고 광고만 하고 아무 데서도 안 도는 상태가
       # 된다 (게이트 실측 지적). 로컬 실행이라 서버측 강제력은 없다: 훅을 지운
       # 사람은 우회할 수 있고, 그 층은 PR 리뷰가 대신한다.
+      #
+      # 푸시되는 ref 를 명시적으로 넘긴다. lib.sh 는 AUDIT_BRANCH 가 없으면
+      # `git symbolic-ref HEAD` 로 떨어지는데, 그건 CI 전제(체크아웃 = 감사 대상)다.
+      # 다른 브랜치에 서서 `git push origin feat/x` 하면 감사가 master 를 보고
+      # lib.sh 의 `master|main) exit 0` 에 걸려 **아무것도 검사하지 않고 통과한다**
+      # (실측: AUDIT_BRANCH=master 로 돌리면 검사 0건에 PASS). 서버측 백스톱이 없는
+      # 이 레포에서는 그게 감사의 완전한 소실이다. pr_review_gate.sh 가 같은 클래스를
+      # 푸시 ref 로 푸는 것과 같은 처방이다. 빈 값이면 `:-` 가 기존 폴백 사슬로
+      # 되돌리므로 `pre-commit run --all-files` 는 그대로 동작한다.
       - id: process-audit
         name: process-audit (파이프라인 준수 감사)
-        entry: sh scripts/process_audit.sh
+        entry: sh -c 'AUDIT_BRANCH="${PRE_COMMIT_LOCAL_BRANCH:-}" sh scripts/process_audit.sh'
         language: system
         pass_filenames: false
         always_run: true
@@ -142,7 +157,7 @@ repos:
         name: pytest (affected — 전체는 수동/CI)
         # 러너를 명시적으로 넘긴다: 스크립트 기본값은 맨 `pytest` 인데 이 레포에서는
         # PATH 에 없다. tests/harness 를 빼는 이유는 pyproject.toml 의
-        # `addopts` 와 같다 — 이 레포 프로필에서 12건이 실패한다(커널 픽스처가
+        # `addopts` 와 같다 — 이 레포 프로필에서 test_audit_* 만 실패한다(커널 픽스처가
         # moru 소스 레포 값을 하드코딩했기 때문이고 감사 스크립트는 정상이다).
         # GLOBAL_EFFECT_RE 도 스왑한다 (PORTING.md 가 스왑 대상 knob 으로 명시).
         # 스크립트 기본값은 uv.lock·alembic 전제라, 그대로 두면 poetry.lock 변경이

@@ -87,6 +87,29 @@ poetry run pyright app
 전부 재작성한다 — `AGENTS.md`·`DEVELOPMENT.md` 의 "요청한 것만 수정, 관련 없는
 리팩토링 금지"와 정면으로 충돌한다.
 
+**자동 수정 커맨드는 이 레포에 없다.** `06-verification.md` 의 실패 라우팅 표가
+"린트 에러 → 자동 수정 (conventions 의 lint fix 커맨드)" 라고 하지만, 여기에 그
+커맨드를 두지 않는 것이 결정이다 — 기존 부채가 있는 상태에서 `ruff check --fix` 는
+이번 작업과 무관한 파일까지 고쳐 같은 규칙을 어긴다. stage-6 은 자동 수정 대신
+**지적을 보고하고 사람 판단으로 넘긴다.**
+
+## 골든 테스트 실패 내역 (init 시점 실측, 2026-07-31)
+
+`.agents/PORTING.md` § 이식 절차 1번이 실패 **파일 이름**을 기록하라고 요구한다 —
+건수만으로는 프로필 한계와 진짜 회귀를 구별할 수 없기 때문이다.
+
+| 파일 | 실패 | 부류 |
+|---|---|---|
+| `test_audit_migration.py` | 4 | 프로필 의존 (alembic 없음) |
+| `test_audit_supply_chain.py` | 5 | 프로필 의존 (uv 아님) |
+| `test_audit_process_chain.py` | 3 | 프로필 의존 (고위험 경로·API 정규식이 다름) |
+| `test_lock_guards.py` · `test_protect_default_branch.py` · `test_affected_selection.py` | **0** | 프로필 독립 — 전부 green |
+
+**프로필 독립 3파일이 전부 green 이라는 것이 판정의 핵심이다.** 하드월(LOCK 가드,
+기본 브랜치 보호, 영향 테스트 선택)이 살아 있다는 뜻이고, `process_audit.sh` 는
+이것들을 실행하지 않으므로 그 PASS 로는 대신할 수 없다. 재측정:
+`poetry run pytest tests/harness -q`.
+
 부채 대장은 아직 없다. `refactor/` 과제를 시작할 때 `.agents/context/debt.md` 를
 만든다.
 
