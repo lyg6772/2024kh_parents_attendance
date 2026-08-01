@@ -156,10 +156,19 @@ repos:
       # 거기서 배운 것을 그대로 쓴다: **"PR 없음"과 "gh 고장"을 구분한다.** 둘을
       # 뭉치면 인증 만료가 조용한 통과로 읽혀 감사가 영영 안 도는데 초록으로 보인다.
       # PR 조회도 푸시되는 ref 로 한다 — AUDIT_BRANCH 와 같은 브랜치를 봐야 한다.
+      #
+      # `refs/heads/` 를 반드시 벗긴다. `PRE_COMMIT_LOCAL_BRANCH` 는 git 이 pre-push
+      # stdin 으로 주는 `<local ref>` 원문이라 `refs/heads/feat/x` 형태다
+      # (`pre_commit/commands/hook_impl.py:130` 이 그 줄을 그대로 쪼개 넘긴다).
+      # 안 벗기면 `gh pr view refs/heads/feat/x` 가 "no pull requests found" 를 내고
+      # 아래 case 가 그걸 "PR 없음"으로 삼켜, **PR 이 열려 있어도 감사가 영영 안 돈다.**
+      # AUDIT_BRANCH 쪽은 `lib.sh` 가 스스로 `${branch#refs/heads/}` 하므로 무사했고,
+      # 이 gh 호출만 새로 노출된 자리였다. 서버측 백스톱이 없는 레포에서 그건 감사의
+      # 완전한 소실이다 — 이 훅 주석이 경고하는 바로 그 방향.
       - id: process-audit
         name: process-audit (파이프라인 준수 감사 — 열린 PR 이 있을 때)
         entry: >-
-          sh -c 'br="${PRE_COMMIT_LOCAL_BRANCH:-}";
+          sh -c 'br="${PRE_COMMIT_LOCAL_BRANCH:-}"; br="${br#refs/heads/}";
             if ! command -v gh >/dev/null 2>&1; then
               echo "process-audit: gh 없음 - 파이프라인 준수 UNVERIFIED" >&2; exit 0; fi;
             err=$(mktemp) || exit 0;
@@ -194,10 +203,23 @@ repos:
         # GLOBAL_EFFECT_RE 도 스왑한다 (PORTING.md 가 스왑 대상 knob 으로 명시).
         # 스크립트 기본값은 uv.lock·alembic 전제라, 그대로 두면 poetry.lock 변경이
         # 전체 스위트로 승격되지 않는다 — 조용히 통과하는 방향의 결함이다.
+        #
+        # SRC_EXT_RE 에 `\.sh$` 를 넣는다. 기본값은 `\.py$` 뿐이라 `scripts/` 의 셸
+        # 스크립트만 고친 푸시가 `changed_py` 를 비우고 `no source changes — nothing
+        # to test` 로 **아무 테스트도 안 돌린 채 통과**했다. 이 레포에는 `.codegraph`
+        # 인덱스가 있어 그 경로를 실제로 탄다(인덱스가 없으면 전체 스위트로 폴백하므로
+        # 안 물린다). 하필 `scripts/` 를 심판하는 것이 `tests/harness/` 골든 테스트라,
+        # 강제 스크립트를 고칠 때 그 증거가 안 도는 모양이었다.
+        # `.sh` 는 codegraph 가 추적하지 않으므로 `affected` 질의가 빈손으로 오고,
+        # 스크립트가 `index found no affected tests` 로 전체 스위트에 폴백한다 —
+        # fail-closed 방향이라 이대로 맞다. 그래서 AFFECTED_TESTS_CMD 의 파일 필터는
+        # 넓히지 않았다: 골든 테스트의 의존 대상이 `.sh` 뿐이라 넓혀도 인덱스가 줄 게
+        # 없고, 지금 값 없는 스왑을 늘리는 것이 된다.
         entry: >-
           env FULL_SUITE_CMD='poetry run pytest -q'
               AFFECTED_RUNNER_CMD='poetry run pytest -q'
               GLOBAL_EFFECT_RE='(^|/)conftest\.py$|^pyproject\.toml$|^poetry\.lock$'
+              SRC_EXT_RE='(\.py|\.sh)$'
               sh scripts/test_affected.sh
         language: system
         always_run: true
