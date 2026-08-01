@@ -71,7 +71,10 @@ class HarnessRepo:
         return self.git("rev-parse", "HEAD")
 
     def branch(self, name: str) -> None:
-        self.git("switch", "-q", "-c", name)
+        # `checkout -b`, not `switch -c`: switch needs git >= 2.23. Same reason as
+        # the `init` + `symbolic-ref` below - a suite that calls every red a
+        # regression must not carry a silent version floor.
+        self.git("checkout", "-q", "-b", name)
 
     def run_script(
         self,
@@ -133,14 +136,24 @@ dev = ["pytest>=8.0"]
 # plugin source pins the two equal so an edit to one cannot silently stop
 # refereeing the other. Nothing to do about it here.
 #
-# WHAT THIS GIVES UP, named exactly: nothing validates that the HOST repo's profile
-# is well-formed. One thing here used to, partially -
-# `test_api_gate_regex_matches_routers_only` pulled API_GATE_RE out of the HOST
-# profile and ran 12 decorator shapes through `grep -E`, so a ported repo's own
-# regex was refereed. It no longer is. That check was only ever meaningful in a
-# repo whose framework matches those 12 shapes (elsewhere it red on a correct
-# profile), which is why the trade was taken - but it was not nothing, and a
-# profile-sanity device is the thing that would replace it.
+# WHAT THIS GIVES UP, named exactly - and NOT more than that, because overstating
+# it makes the next reader build a device that already exists:
+#
+# Already covered, every audit run, fail-closed: `scripts/audit/lib.sh` refuses to
+# run when the profile is missing, and again when any of the six required
+# variables is blank. Absence and blankness are NOT the gap.
+#
+# The gap is one check, and it is narrower than "the host profile is unvalidated":
+# `test_api_gate_regex_matches_routers_only` used to pull API_GATE_RE out of the
+# HOST profile and run 12 decorator shapes through `grep -E`, so a ported repo's
+# own regex was refereed for being a working regex. It no longer is. That check
+# was only ever meaningful in a repo whose framework matches those 12 shapes
+# (elsewhere it red on a correct profile), which is why the trade was taken - but
+# it was not nothing.
+#
+# So what a profile-sanity device would still add, and only this: do the regexes
+# compile, and do the `*_DIR` paths exist. Anything about required variables being
+# set is already lib.sh's job - do not build it twice.
 REPO_PROFILE = r"""SRC_DIR="app"
 TESTS_DIR="tests"
 DEPS_MANIFEST="pyproject.toml"
@@ -174,8 +187,7 @@ def repo(tmp_path: Path) -> HarnessRepo:
     upstream = tmp_path / "upstream"
     upstream.mkdir()
     up = HarnessRepo(upstream)
-    # `init -b` needs git >= 2.28; symbolic-ref works everywhere. The suite claims
-    # "any red is a regression", so it must not carry a silent version floor -
+    # `init -b` needs git >= 2.28; symbolic-ref works everywhere.
     # tests/harness_matrix.sh already avoids `-b` for this reason.
     up.git("init", "-q")
     up.git("symbolic-ref", "HEAD", "refs/heads/master")

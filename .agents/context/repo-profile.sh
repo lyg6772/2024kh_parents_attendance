@@ -58,6 +58,33 @@ SHARED_CODE_RE="^app/util/|^app/dao/tables\.py$|^app/service/models\.py$"
 # 생태계 무관으로 덮으므로, 빠지는 것은 이름 환각(slopsquat) 가드뿐이다.
 PKG_ECOSYSTEM="python-poetry"
 
+# --- 영향 테스트 러너 (scripts/test_affected.sh) ---
+# 커널 기본값은 맨 `pytest` 인데 이 레포 PATH 에 없다 (.venv/bin 이 안 잡힌다).
+# **프로필이 이 값들의 유일한 소유자다.** 훅 env 에도 적으면 두 벌이 되고, 스크립트가
+# 프로필을 나중에 source 하므로 훅 쪽이 조용히 무시된다 — 고칠 때 안 고쳐지는 사본이
+# 생긴다. 프로필에 두면 `sh scripts/test_affected.sh` 직접 실행도 그대로 동작한다
+# (실측 2026-08-01: 훅 env 에만 뒀을 때 직접 실행이 rc=127 로 죽었다).
+FULL_SUITE_CMD="poetry run pytest -q --ignore=$TESTS_DIR/harness"
+AFFECTED_RUNNER_CMD="poetry run pytest -q"
+# 커널 기본값은 uv.lock·alembic 전제라 그대로 두면 poetry.lock 변경이 전체 스위트로
+# 승격되지 않는다 — 조용히 통과하는 방향이다.
+GLOBAL_EFFECT_RE='(^|/)conftest\.py$|^pyproject\.toml$|^poetry\.lock$'
+
+# --- 골든 테스트 문 (scripts/test_affected.sh, 커널 0.25.0 신규) ---
+# 하네스의 강제 코드는 어느 스택에서든 셸이고 그걸 심판하는 건 tests/harness/ 뿐인데,
+# 코드 인덱스는 셸→테스트를 매핑하지 못한다. 그래서 SRC_EXT_RE(스택별 노브)를 타지
+# 않고 전용 문으로 선다. 이 레포는 기본값이 그대로 맞다 — `scripts/` 는 전부 셸이고
+# 골든 테스트도 설치돼 있다. 그래서 HARNESS_SRC_RE 는 안 적는다(기본값이 정답이면
+# 적는 것이 곧 드리프트 지점을 하나 만드는 것이다).
+#
+# 러너만 스왑한다. 커널 기본값은 맨 `pytest` 인데 이 레포 PATH 에 없다 —
+# FULL_SUITE_CMD·AFFECTED_RUNNER_CMD 와 같은 이유다. 경로는 리터럴로 박지 않고
+# $TESTS_DIR 로 짠다: 위에서 이미 정의됐고, 나중에 테스트 경로를 옮겨도 같이 따라온다.
+# (커널 프로필 템플릿은 이 줄을 아예 두지 말라고 하는데, 그건 리터럴 `tests/harness`
+#  를 박는 경우를 막으려는 것이다. 러너 자체가 pytest 가 아닌 이 레포는 스왑 대상이고,
+#  변수로 짜면 그 경고가 가리키는 파손은 생기지 않는다.)
+HARNESS_SUITE_CMD="poetry run pytest -q $TESTS_DIR/harness"
+
 # --- stop-validate (턴 종료 검증 훅 — moru 플러그인 scripts/stop_validate.sh) ---
 # 파이프라인 밖 편집의 턴 종료 조기경보. 비우면 훅 전체 no-op (fail-open).
 # 명령은 줄바꿈 구분, 각 줄이 sh -c 로 실행된다. 가볍게 유지 (매 편집 턴 실행됨).

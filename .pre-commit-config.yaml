@@ -196,31 +196,15 @@ repos:
 
       - id: pytest
         name: pytest (affected — 전체는 수동)
-        # 러너를 명시적으로 넘긴다: 스크립트 기본값은 맨 `pytest` 인데 이 레포에서는
-        # PATH 에 없다. `--ignore=tests/harness` 는 커널 0.24.1 에서 뺐다 — 골든
-        # 테스트가 더 이상 이 레포 프로필을 읽지 않아 전건 green 이다(사유는
-        # pyproject.toml 의 같은 자리).
-        # GLOBAL_EFFECT_RE 도 스왑한다 (PORTING.md 가 스왑 대상 knob 으로 명시).
-        # 스크립트 기본값은 uv.lock·alembic 전제라, 그대로 두면 poetry.lock 변경이
-        # 전체 스위트로 승격되지 않는다 — 조용히 통과하는 방향의 결함이다.
+        # **러너·노브 스왑은 여기 없다.** 전부 `.agents/context/repo-profile.sh` 가
+        # 소유한다 — 스크립트가 프로필을 나중에 source 하므로 여기 적으면 조용히
+        # 무시되는 두 번째 사본이 된다. 프로필에 두면 `sh scripts/test_affected.sh`
+        # 직접 실행도 같은 값으로 돈다 (훅 env 에만 뒀을 때 직접 실행이 rc=127 로
+        # 죽는 것을 실측했다).
         #
-        # SRC_EXT_RE 에 `\.sh$` 를 넣는다. 기본값은 `\.py$` 뿐이라 `scripts/` 의 셸
-        # 스크립트만 고친 푸시가 `changed_py` 를 비우고 `no source changes — nothing
-        # to test` 로 **아무 테스트도 안 돌린 채 통과**했다. 이 레포에는 `.codegraph`
-        # 인덱스가 있어 그 경로를 실제로 탄다(인덱스가 없으면 전체 스위트로 폴백하므로
-        # 안 물린다). 하필 `scripts/` 를 심판하는 것이 `tests/harness/` 골든 테스트라,
-        # 강제 스크립트를 고칠 때 그 증거가 안 도는 모양이었다.
-        # `.sh` 는 codegraph 가 추적하지 않으므로 `affected` 질의가 빈손으로 오고,
-        # 스크립트가 `index found no affected tests` 로 전체 스위트에 폴백한다 —
-        # fail-closed 방향이라 이대로 맞다. 그래서 AFFECTED_TESTS_CMD 의 파일 필터는
-        # 넓히지 않았다: 골든 테스트의 의존 대상이 `.sh` 뿐이라 넓혀도 인덱스가 줄 게
-        # 없고, 지금 값 없는 스왑을 늘리는 것이 된다.
-        entry: >-
-          env FULL_SUITE_CMD='poetry run pytest -q'
-              AFFECTED_RUNNER_CMD='poetry run pytest -q'
-              GLOBAL_EFFECT_RE='(^|/)conftest\.py$|^pyproject\.toml$|^poetry\.lock$'
-              SRC_EXT_RE='(\.py|\.sh)$'
-              sh scripts/test_affected.sh
+        # `scripts/*.sh` 만 고친 푸시가 테스트 0건으로 통과하던 것은 커널 0.25.0 이
+        # 전용 문(`HARNESS_SRC_RE`)으로 닫았다. 이 레포는 기본값이 맞아 러너만 스왑한다.
+        entry: sh scripts/test_affected.sh
         language: system
         always_run: true
         pass_filenames: false

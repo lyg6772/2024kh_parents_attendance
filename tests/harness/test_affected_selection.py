@@ -36,6 +36,12 @@ def _stub_path(repo: "HarnessRepo", with_codegraph: bool) -> dict[str, str]:
     return {"PATH": f"{stub_dir}:{BASE_PATH}"}
 
 
+def _goldens(repo: "HarnessRepo") -> None:
+    """The golden suite exists in this repo. The fixture has no tests/harness/ by
+    default, which is exactly the "repo skipped the goldens at install" shape."""
+    repo.write("tests/harness/test_dummy.py", "def test_dummy() -> None: ...\n")
+
+
 def _index(repo: "HarnessRepo") -> None:
     marker = repo.path / ".codegraph" / "codegraph.db"
     marker.parent.mkdir(exist_ok=True)
@@ -152,3 +158,77 @@ def test_custom_index_tool_via_env_seam(repo: "HarnessRepo") -> None:
     result = repo.run_script("test_affected.sh", env=env)
     assert result.returncode == 0
     assert "PYTEST_ARGS:-q tests/test_user.py" in result.stdout
+
+
+def test_enforcement_script_change_runs_the_goldens(repo: "HarnessRepo") -> None:
+    """A `scripts/*.sh` change must run the golden tests.
+
+    They are the only referee of the enforcement scripts, and no code index maps
+    shell to them. SRC_EXT_RE is a per-stack knob (default `\\.py$`), so before the
+    fix a scripts-only change fell out at "no source changes - nothing to test" and
+    ran ZERO tests, in exactly the diff that edits the gates.
+    """
+    _index(repo)
+    _goldens(repo)
+    repo.write("scripts/audit/99-new-check.sh", "#!/bin/sh\nexit 0\n")
+    result = repo.run_script("test_affected.sh", env=_stub_path(repo, with_codegraph=True))
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "harness source changed" in result.stderr
+    assert "PYTEST_ARGS:-q tests/harness" in result.stdout
+
+
+def test_harness_src_re_empty_opts_out(repo: "HarnessRepo") -> None:
+    """A repo that did not take the golden tests must be able to turn the door off -
+    and an unmatched regex is the old silent fail-open, which is why the knob is in
+    the profile where a human reviews it rather than hardcoded in the script."""
+    _index(repo)
+    _goldens(repo)
+    repo.write("scripts/audit/99-new-check.sh", "#!/bin/sh\nexit 0\n")
+    env = _stub_path(repo, with_codegraph=True)
+    env["HARNESS_SRC_RE"] = ""
+    result = repo.run_script("test_affected.sh", env=env)
+    assert result.returncode == 0
+    assert "harness source changed" not in result.stderr
+    # the exact goldens invocation, not the substring: _goldens() left an
+    # uncommitted tests/harness/test_dummy.py, which the normal selection picks up
+    # as a changed test file - that is the selector working, not the door firing.
+    assert "PYTEST_ARGS:-q tests/harness\n" not in result.stdout
+
+
+def test_goldens_run_even_when_the_index_also_selects_tests(repo: "HarnessRepo") -> None:
+    """The door is BEFORE the source filter on purpose. If it sat inside the
+    full-suite fallback, a stub/real index that answered for the .sh change would
+    route to an affected list and skip the goldens - the same hole, one layer in."""
+    _index(repo)
+    _goldens(repo)
+    repo.write("scripts/audit/99-new-check.sh", "#!/bin/sh\nexit 0\n")
+    repo.write("app/services/user.py", "def existing() -> None: ...\ndef added(): ...\n")
+    result = repo.run_script("test_affected.sh", env=_stub_path(repo, with_codegraph=True))
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "PYTEST_ARGS:-q tests/harness\n" in result.stdout   # goldens ran, on their own
+    assert "tests/test_user.py" in result.stdout                # and the selection still happened
+
+
+def test_goldens_run_even_without_an_index(repo: "HarnessRepo") -> None:
+    """The door must sit ABOVE the index check.
+
+    `full("no code index")` execs, so while the door lived below it an index-less
+    repo — most ported repos — never reached it and a gate edit ran zero goldens.
+    """
+    _goldens(repo)
+    repo.write("scripts/audit/99-new-check.sh", "#!/bin/sh\nexit 0\n")
+    result = repo.run_script("test_affected.sh", env=_stub_path(repo, with_codegraph=False))
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "PYTEST_ARGS:-q tests/harness" in result.stdout
+    assert "no code index" in result.stderr
+
+
+def test_goldens_skipped_when_the_repo_has_no_harness_dir(repo: "HarnessRepo") -> None:
+    """A repo that skipped tests/harness at install (no pytest) must not be
+    hard-blocked. The profile opt-out is documented, but a default that needs
+    reading to survive is the wrong default - the door checks the directory."""
+    _index(repo)   # note: _goldens() deliberately NOT called - no tests/harness/
+    repo.write("scripts/audit/99-new-check.sh", "#!/bin/sh\nexit 0\n")
+    result = repo.run_script("test_affected.sh", env=_stub_path(repo, with_codegraph=True))
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "tests/harness" not in result.stdout
