@@ -113,7 +113,46 @@ dependencies = ["fastapi>=0.100"]
 dev = ["pytest>=8.0"]
 """
 
-REPO_PROFILE = (PROJECT_ROOT / ".agents/context/repo-profile.sh").read_text()
+# The fixture repo's OWN profile - deliberately a literal, not the host repo's
+# `.agents/context/repo-profile.sh`.
+#
+# These are golden tests: they referee `scripts/`, which is kernel code identical
+# in every repo. A golden test whose input changes per repo is not golden. Reading
+# the host profile made the fixture an incoherent hybrid - fixed layout (written by
+# the test files) plus a profile from outside pointing the scripts somewhere else.
+# What that cost on the 2nd port is recorded in the moru plugin source
+# (`docs/field/2026-07-31-port-2nd-cycle.md` § A), not here.
+# `test_lock_guards.py` already worked this way and is the file that stayed green
+# on every port.
+#
+# NOT a duplicate of the DEFAULT profile that moru ships to a new repo (that file
+# lives in the plugin source and is rewritten on install; here it is the thing you
+# already edited). This one describes the fixture repo below. But API_GATE_RE is a
+# verbatim copy of the shipped default, because
+# `test_api_gate_regex_matches_routers_only` exists to referee THAT regex - the
+# plugin source pins the two equal so an edit to one cannot silently stop
+# refereeing the other. Nothing to do about it here.
+#
+# WHAT THIS GIVES UP, named exactly: nothing validates that the HOST repo's profile
+# is well-formed. One thing here used to, partially -
+# `test_api_gate_regex_matches_routers_only` pulled API_GATE_RE out of the HOST
+# profile and ran 12 decorator shapes through `grep -E`, so a ported repo's own
+# regex was refereed. It no longer is. That check was only ever meaningful in a
+# repo whose framework matches those 12 shapes (elsewhere it red on a correct
+# profile), which is why the trade was taken - but it was not nothing, and a
+# profile-sanity device is the thing that would replace it.
+REPO_PROFILE = r"""SRC_DIR="app"
+TESTS_DIR="tests"
+DEPS_MANIFEST="pyproject.toml"
+API_GATE_RE="^\+.*(@[A-Za-z0-9_]*(router|app)\.(get|post|put|patch|delete|head|options|trace|websocket|websocket_route|route|api_route)\(|add_api_route|add_route|include_router|APIRoute\(|WebSocketRoute\(|Mount\()"
+HIGH_RISK_PATH_RE="^app/core/security\.py$|^app/api/deps\.py$|^app/core/config\.py$"
+HIGH_RISK_CONTENT_RE="^\+[^+].*(payment|billing|invoice|refund|card_number|결제|환불|카드번호|주민등록)"
+MODELS_DIR="app/models"
+MIGRATIONS_DIR="migrations"
+SETTINGS_RE="^app/core/config\.py$"
+SHARED_CODE_RE="^app/core/|^app/api/deps\.py$|^app/(models|repositories|services)/base\.py$"
+PKG_ECOSYSTEM="python-uv"
+"""
 
 STAGE7_PASS = """\
 # 07 review
@@ -135,7 +174,11 @@ def repo(tmp_path: Path) -> HarnessRepo:
     upstream = tmp_path / "upstream"
     upstream.mkdir()
     up = HarnessRepo(upstream)
-    up.git("init", "-q", "-b", "master")
+    # `init -b` needs git >= 2.28; symbolic-ref works everywhere. The suite claims
+    # "any red is a regression", so it must not carry a silent version floor -
+    # tests/harness_matrix.sh already avoids `-b` for this reason.
+    up.git("init", "-q")
+    up.git("symbolic-ref", "HEAD", "refs/heads/master")
     up.commit(
         "initial",
         files={

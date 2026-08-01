@@ -161,7 +161,7 @@ await session.commit()
 ### Quick commands
 
 ```bash
-poetry run pytest -q                     # 테스트 (tests/harness 는 기본 수집에서 빠진다)
+poetry run pytest -q                     # 테스트 (tests/harness 골든 테스트 포함 — 2~3분)
 poetry run ruff check .                  # 린트 — 기존 부채 있음, 훅에 비차단으로 물림
 poetry run ruff format --check --diff .  # 포맷 — 검사만. 재작성하지 않는다
 poetry run pyright app                   # 타입 — 기존 부채 있음

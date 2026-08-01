@@ -257,9 +257,16 @@ def test_feat_branch_editing_enforcement_surface_fails_hard(
 ) -> None:
     """A feature PR that rewrites the gate-detection knobs could neuter the audit
     in the same PR that exploits it - hard red without a human decision record."""
+    # neuter the API gate: no decorator name can match after this.
+    neutered = REPO_PROFILE.replace("(router|app)", "(nevermatches)")
+    # a no-op replace commits a byte-identical file, so the diff the check looks
+    # for never exists and the test proves nothing. The previous form targeted a
+    # literal `@router` that the profile stopped containing when API_GATE_RE was
+    # generalized (2026-07-26) - and nothing said so. Assert the mutation landed.
+    assert neutered != REPO_PROFILE, "profile mutation was a no-op"
     conformant_feat.commit(
         "gate regex neutered",
-        files={".agents/context/repo-profile.sh": REPO_PROFILE.replace("@router", "@never")},
+        files={".agents/context/repo-profile.sh": neutered},
     )
     result = conformant_feat.run_audit(CHECK, branch="feat/x")
     assert result.returncode == 1

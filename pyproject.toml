@@ -39,15 +39,13 @@ pre-commit = "^4.6.1"
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-# tests/harness 는 하네스 커널의 골든 테스트다. 이 레포의 프로필에서 test_audit_*
-# 만 실패하는데(실패 파일 내역은 codebase-conventions.md 가 소유한다), 결함이
-# 아니라 픽스처가 moru 소스 레포의 값(app/core/security.py,
-# alembic 있음, uv 씀)을 하드코딩했기 때문이다 — 감사 스크립트 자체는 정상이고
-# (`sh scripts/process_audit.sh` PASS), 없는 기능은 선언적으로 스킵한다.
-# 상시 빨간 스위트는 읽히지 않으므로 기본 수집에서 뺀다. 돌릴 때는 명시적으로:
-#   poetry run pytest tests/harness
-# 커널 픽스처를 프로필에서 파생시키는 수정은 moru 레포의 후속 과제다.
-addopts = "--ignore=tests/harness"
+# tests/harness 는 하네스 커널의 골든 테스트다. 설치 시점(2026-07-31)에는 이 레포
+# 프로필에서 12건이 빨개서 기본 수집에서 뺐었다 — 그 red 는 결함이 아니라 커널
+# 픽스처가 자기 프로필 대신 **이 레포의** 프로필을 읽었기 때문이었다. moru 쪽에서
+# 결합을 끊었고(커널 0.24.1), 지금은 127건 전부 green 이라 제외할 이유가 없다.
+# 상시 빨간 스위트만큼이나 안 도는 스위트도 안 읽히므로, 예외를 두지 않는다.
+# 매 실행이 2~3분이지만 기본 수집에 있어도 pre-push 는 영향 테스트만 고른다
+# (scripts/ 나 tests/harness/ 를 건드릴 때만 실제로 돈다).
 
 [tool.ruff]
 # 기존 코드에 부채가 있는 상태로 도입했다. 훅은 비차단이고, 게이트는 stage-6

@@ -60,18 +60,24 @@
 ## 이식 절차 (체크리스트)
 
 1. 커널 복사 → `repo-profile.sh` 작성 → 골든 테스트 실행 (`pytest tests/harness`).
-   **red 를 두 부류로 나눠서 본다 — 뭉뚱그리면 진짜 고장이 "픽스처 한계"로 통과한다:**
+   **전부 green 이어야 한다. red 는 회귀다** — 이 스위트는 이 레포의 프로필을 읽지
+   않는다. `conftest.py` 가 합성 레포의 프로필을 리터럴로 들고 있어서, 대상 레포의
+   스택·레이아웃과 무관하게 같은 입력으로 돈다. 판정할 것은 하나다: **`scripts/` 를
+   제대로 복사했는가.** (프로필이 다르면 `test_audit_*` red 가 정상이라던 이전 규칙은
+   2026-08-01 에 폐기됐다 — 그 관용이 오탐만 만들었기 때문이고, 근거는
+   `conftest.py` 의 `REPO_PROFILE` 머리주석이 이 레포 안에서 소유한다.)
 
-   | 부류 | 파일 | 판정 |
-   |---|---|---|
-   | 프로필 의존 | `test_audit_*.py` | red 가 **정상일 수 있다.** `conftest.py` 가 살아 있는 `repo-profile.sh` 를 합성 레포에 심는데 픽스처는 소스 레포의 구체값(고위험 경로, API 데코레이터, alembic·uv 존재)을 하드코딩한다 — 프로필이 다르면 그만큼 어긋난다 |
-   | 프로필 독립 | `test_lock_guards.py`, `test_protect_default_branch.py`, `test_affected_selection.py` | **전부 green 이어야 한다.** LOCK 가드·기본 브랜치 보호·영향 테스트 선택의 유일한 증거이고, `process_audit.sh` 는 `scripts/audit/[0-9]*-*.sh` 만 돌므로 이것들을 **전혀 실행하지 않는다.** 단 `test_affected_selection.py` 는 `TESTS_DIR` 과 러너 knob 을 기본값으로 전제하므로, 그것을 바꾼 레포에서는 여기도 정상 red 가 될 수 있다 |
+   **단 두 가지는 회귀가 아니라 환경이므로 먼저 배제한다:** ① 수집 에러 —
+   `test_audit_supply_chain.py` 가 `from datetime import UTC` 를 쓰므로 python 3.11
+   미만이면 그 파일만 임포트에서 죽는다(나머지는 돈다),
+   ② 러너 설정 — `pyproject.toml` 의 `addopts` 에 커버리지 임계나
+   `filterwarnings = ["error"]` 가 있으면 `pytest tests/harness` 단독 실행이 그것 때문에
+   빨개진다. 그 밖은 전부 밀폐돼 있다(git 설정 격리·가짜 curl·jq 없으면 skipif).
 
    그래서 `sh scripts/process_audit.sh` PASS 는 감사 체인이 정상이라는 뜻일 뿐,
-   하드월이 살아 있다는 증거가 아니다. **포팅 보고에 실패한 파일 이름을 적는다** —
-   전부 `test_audit_*` 면 알려진 한계이고, 그 밖이 하나라도 섞이면 회귀다. 이 규칙은
-   숫자가 아니라 부류로 판정한다: 몇 건이 red 인지는 레포마다 다르고, 어느 부류인지만
-   보편이다.
+   하드월이 살아 있다는 증거가 아니다 — `process_audit.sh` 는 `scripts/audit/[0-9]*-*.sh`
+   만 돌므로 LOCK 가드·기본 브랜치 보호·영향 테스트 선택은 **전혀 실행하지 않는다.**
+   그 셋의 유일한 증거가 이 스위트다. **포팅 보고에 실패한 파일 이름을 적는다.**
 2. 셸 항목 재생성 (위 표 순서대로)
 3. 첫 기능을 QUICKSTART 해피패스로 1회 돌려 게이트·LOCK·감사가 실제로 발화하는지 확인
 4. `장치 적중` 텔레메트리를 기능 5~10개 누적 후 검토 — **돌았는데도** 적중 0인 장치는
