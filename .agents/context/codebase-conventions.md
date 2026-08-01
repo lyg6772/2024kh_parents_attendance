@@ -46,6 +46,12 @@ tests/             pytest, conftest.py 가 aiosqlite 인메모리 세션 픽스�
 | e2e | `python run_app.py` 로 실기동 후 수동 확인 | 자동화된 e2e 스위트는 없다 — stage-6 은 수동 확인 결과를 기록한다 |
 | 커버리지 | *(없음)* | 커버리지 도구 미설치 → **stage-6 §2-2 는 N/A 로 하강한다** |
 
+훅 체인은 `poetry` 밖의 바이너리 셋에 의존한다 — `gitleaks`(비밀 스캔) ·
+`semgrep`(SAST) · `osv-scanner`(의존성 CVE). 셋 다 pre-push 를 **차단**하므로, 없으면
+새 클론에서 푸시가 막힌다. macOS 는 `brew install gitleaks semgrep osv-scanner`,
+그 외는 각 프로젝트의 릴리스 바이너리를 쓴다. `gh`(PR 조회)와 `claude`(리뷰 게이트)는
+없어도 해당 층이 비차단으로 내려갈 뿐이라 필수는 아니다.
+
 ## 테스트 규약
 
 - 파일명 `tests/test_*.py`, 클래스로 묶는다 (`class TestArgsSchema:`)
@@ -192,3 +198,8 @@ pyright 지적의 상당수는 SQLAlchemy async 세션 타이핑 artifact 다 (`
   맞추지 않는 이유는 그게 커널 사본이기 때문이다 (`.agents/PORTING.md`) — 레포별
   이탈은 여기서 선언한다
 - **커버리지 도구 없음** → 신규 코드 커버리지 게이트는 N/A
+- **`.github/PULL_REQUEST_TEMPLATE.md` 없음** → `pr-body-template` 훅
+  (`scripts/pr_body_check.sh`)이 **영구 무동작**이다. 그 스크립트는 템플릿 파일이
+  있을 때만 본문을 대조하므로, 지금 이 층은 켜져 있는 것처럼 보이지만 아무것도 안
+  본다. 템플릿을 두면 그날 바로 살아나는 층이라 후속으로 남긴다 — 지금 당장의 대체는
+  사람의 PR 리뷰다
