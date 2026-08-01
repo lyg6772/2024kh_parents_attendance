@@ -88,7 +88,7 @@ repos:
         # dash 에서 깨져 커밋이 막힌다.
         entry: >-
           sh -c 'rc=0; for f in "$@"; do
-            case $(head -n 1 "$f") in
+            case "$(head -n 1 "$f")" in
               *bash*) bash -n "$f" || rc=1 ;;
               *zsh*)  command -v zsh >/dev/null 2>&1 && { zsh -n "$f" || rc=1; } ;;
               *)      sh -n "$f" || rc=1 ;;

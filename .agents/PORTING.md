@@ -20,7 +20,7 @@
 | `scripts/pr_review_gate.sh`, `scripts/default_branch.sh` | 푸시 전 LLM 리뷰 게이트 |
 | 보안 바닥 훅 (gitleaks·semgrep·osv-scanner) | 언어무관 — precommit 체인에서 그대로 복사, 스택별 스왑 안 함 (도구만 설치) |
 | `tests/harness/` | 강제 스크립트 골든 테스트 (스크립트를 가져가면 테스트도 가져간다) |
-| `.claude/commands/*.md` + `.claude/agents/*.md` | 커맨드·서브에이전트 (모델 티어링 포함) |
+| ~~`.claude/commands/*.md` + `.claude/agents/*.md`~~ (source-repo-only: 복사하지 말라고 경로를 지목하는 행이라 인용 검사에서 면제한다) | **복사하지 않는다 — moru 플러그인이 제공한다.** 커맨드·서브에이전트(모델 티어링 포함)는 플러그인이 설치된 세션에서 그대로 뜨므로, 복사하면 두 벌이 생기고 갱신이 갈라진다. 실측 2026-07-31: 대상 레포에 `.claude/` 가 하나도 없이 슬래시 커맨드 전부와 `test_lock_guard.sh` 의 PreToolUse 훅이 동작했다. 플러그인 없이 하네스만 쓰려면 **설치 시점(플러그인이 있는 세션)에** `${CLAUDE_PLUGIN_ROOT}/commands/` · `${CLAUDE_PLUGIN_ROOT}/agents/` 에서 미리 복사해 둔다 — 그 변수는 플러그인이 있을 때만 정의되므로 나중에는 풀리지 않는다 |
 
 ## 레포마다 재생성하는 것 (셸)
 
@@ -59,7 +59,19 @@
 
 ## 이식 절차 (체크리스트)
 
-1. 커널 복사 → `repo-profile.sh` 작성 → 골든 테스트 실행 (`pytest tests/harness`)
+1. 커널 복사 → `repo-profile.sh` 작성 → 골든 테스트 실행 (`pytest tests/harness`).
+   **red 를 두 부류로 나눠서 본다 — 뭉뚱그리면 진짜 고장이 "픽스처 한계"로 통과한다:**
+
+   | 부류 | 파일 | 판정 |
+   |---|---|---|
+   | 프로필 의존 | `test_audit_*.py` | red 가 **정상일 수 있다.** `conftest.py` 가 살아 있는 `repo-profile.sh` 를 합성 레포에 심는데 픽스처는 소스 레포의 구체값(고위험 경로, API 데코레이터, alembic·uv 존재)을 하드코딩한다 — 프로필이 다르면 그만큼 어긋난다 |
+   | 프로필 독립 | `test_lock_guards.py`, `test_protect_default_branch.py`, `test_affected_selection.py` | **전부 green 이어야 한다.** LOCK 가드·기본 브랜치 보호·영향 테스트 선택의 유일한 증거이고, `process_audit.sh` 는 `scripts/audit/[0-9]*-*.sh` 만 돌므로 이것들을 **전혀 실행하지 않는다.** 단 `test_affected_selection.py` 는 `TESTS_DIR` 과 러너 knob 을 기본값으로 전제하므로, 그것을 바꾼 레포에서는 여기도 정상 red 가 될 수 있다 |
+
+   그래서 `sh scripts/process_audit.sh` PASS 는 감사 체인이 정상이라는 뜻일 뿐,
+   하드월이 살아 있다는 증거가 아니다. **포팅 보고에 실패한 파일 이름을 적는다** —
+   전부 `test_audit_*` 면 알려진 한계이고, 그 밖이 하나라도 섞이면 회귀다. 이 규칙은
+   숫자가 아니라 부류로 판정한다: 몇 건이 red 인지는 레포마다 다르고, 어느 부류인지만
+   보편이다.
 2. 셸 항목 재생성 (위 표 순서대로)
 3. 첫 기능을 QUICKSTART 해피패스로 1회 돌려 게이트·LOCK·감사가 실제로 발화하는지 확인
 4. `장치 적중` 텔레메트리를 기능 5~10개 누적 후 검토 — **돌았는데도** 적중 0인 장치는

@@ -114,7 +114,7 @@ fi
 #
 # What still holds on a bootstrap PR: destructive-migration and supply-chain
 # checks, and the enforcement scripts' own golden tests, which run in a sandbox
-# (tests/harness_matrix.sh) and are the real proof that what is being installed
+# (tests/harness/) and are the real proof that what is being installed
 # works. Only the "did a pipeline run" evidence is waived.
 bootstrap=0
 if [ -n "$base" ] && git diff --name-status --diff-filter=A "$base" HEAD 2>/dev/null |
