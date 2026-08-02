@@ -1,391 +1,431 @@
-# [7단계] 리뷰 산출물 — verifier 겸 judge (http-auth-oracle)
+# [7단계] 리뷰 산출물 — 델타 재리뷰 (http-auth-oracle) · 2026-08-03
 
-역할: `.agents/07-review.md` §1-1 2번 (verifier 겸 judge). finder 3개 렌즈 산출물을
-중복 제거 후 적대적으로 반박 검증하고, 실행 가능한 후보는 **프로브로만** 판정했다.
-체크리스트 **#6(테스트 품질)·#9(유지보수)** 는 렌즈 배정이 없어 내가 직접 봤다.
+역할: `.agents/07-review.md` §1-1 2번(verifier 겸 judge) + §4-1(재리뷰 — 델타).
+직전 라운드(2026-08-02) verdict 는 **BLOCK, major 2건**이었다. 이 라운드는 그 2건이
+**실제로 해소됐는지**와 **수정이 새로 만든 문제**만 본다.
 
-- 대상: `tests/conftest.py`(수정) + `tests/test_http_{auth,pages,agent,env,socket}.py`(신규)
-  + `osv-scanner.toml`(머리말) + `.agents/context/codebase-conventions.md`(§숨은 결합).
-  **앱 코드 변경 0건** (`git diff --stat -- app/` 공백 재확인).
-- 게이트 판정: `03-design.md` 가 **비게이트** — 심층 적대 렌즈 미실행, 2차 verifier 미적용.
-- 성격: 기능 테스트 스위트가 아니라 **의존성 업그레이드 오라클**. "이 라우트의 로직을
-  더 깊이 검증하라"는 범위 밖으로 처리했고, "덮는다고 주장하는데 실제로 안 덮는다"만
-  범위 안으로 봤다.
+- 델타 범위: `git diff d398d47..HEAD` — `tests/conftest.py`, `tests/test_http_socket.py`,
+  `tests/test_http_env.py`, `tests/test_http_pages.py`, `osv-scanner.toml`,
+  결정 로그, LOCK 마커 삭제. **앱 코드 변경 0건** (`git diff --stat origin/master...HEAD -- app/` 공백 재확인).
+- 전체 브랜치 diff: `git diff "$(sh scripts/default_branch.sh)"...HEAD` = `origin/master...HEAD`.
+- **풀 재리뷰 승격 조건 미해당**으로 판정했다: 델타가 건드린 파일이 전부 직전 리뷰 diff
+  안에 있고, 앱 공유 코드(`app/`, deps, core)는 무수정이다. 다만 `tests/conftest.py` 는
+  전 스위트가 물고 있으므로 파급을 **전체 스위트 실행으로** 대신 확인했다 (아래 282 passed).
+- 게이트 판정: `03-design.md` 가 **비게이트** — 심층 적대 렌즈 미실행, 2차 verifier 미적용
+  (§1-1 3번: 비게이트는 1차 PASS 로 확정).
 - 베이스라인: `GROQ_API_KEY="" GEMINI_API_KEY="" poetry run pytest tests/test_http_*.py -q`
-  → **40 passed in 1.58s**. 전체 스위트 `poetry run pytest -q` → **282 passed in 168.77s**
-  (느린 168초는 전부 기존 `tests/harness/*` — 이 diff 무관).
+  → **40 passed in 1.62s**. 전체 `poetry run pytest -q` → **282 passed in 171.49s** (회귀 0).
+  결정성: 소켓 파일 5회 연속 동일(2 passed), 파일 역순 40 passed.
 
 ---
 
 ## 중복 제거 후 finding
 
-| # | 계열 | 출처 렌즈 | 원 확신도 |
-|---|---|---|---|
-| A | 고정 임시 DB 경로 (`/tmp` 고정 파일명) — 동시 실행 충돌 + `/tmp` 심볼릭 링크 TOCTOU | correctness [높음] + security [낮음] (**같은 라인·같은 원인 → 1건으로 병합**) | 높음 |
-| B | fixture 스코프 누수 — 세션 내내 물리 sqlite 1개를 공유해 테스트 간 쓰기가 샌다 | correctness [높음] | 높음 |
-| C | `/docs`·`/openapi.json`·`/redoc` 무토큰 200 을 오라클이 안 본다 | security [높음] | 높음 |
-| D | 실소켓 테스트가 2개라 uvicorn 을 2번 띄운다 (설계는 "1개만 둔다") | spec [낮음] + correctness [중간] (**병합**) | 중간 |
-| E | `tests/ztmp_probe_test.py` 가 LOCK 대상 `tests/` 에 남아 있다 | spec [낮음] | 낮음 |
-| F | `seeded_app` 이 설계의 `seeded_admin`+`client` 두 픽스처를 하나로 합쳤다 | spec [중간] | 중간 |
-| G | `tokens(valid/expired/forged)` 픽스처가 fixture 가 아니라 모듈 함수로 구현됐다 | spec [낮음] | 낮음 |
-| H | R-5 "토큰=관리자" 데이터 불변식의 음성 테스트가 없다 | security [중간] | 중간 |
-| I | `_free_port()` ↔ uvicorn 바인드 TOCTOU | correctness [낮음] | 낮음 |
-| J | `os.environ.update()` 를 되돌리지 않는다 | correctness [낮음] | 낮음 |
-| K | 만료 토큰의 collection-time 계산 | correctness [낮음] (자체 하강) | 낮음 |
-| L | 잘못된 `cal_date` → 500 / mass assignment 없음 / IDOR 없음 / 사용자 열거 없음 | security [정보·확인됨] | — |
+직전 라운드에서 넘어온 것 + 이번 델타에서 새로 본 것을 한 표로 합쳤다.
+(직전 라운드 렌즈 3개 finding 의 원계열은 아래 §Finder 원출력이 소유한다.)
 
-**verifier 가 추가한 후보** (finder 미발견, 동일한 반박 절차 적용):
+| # | 계열 | 출처 | 직전 등급 | 이번 상태 |
+|---|---|---|---|---|
+| M | h11 프레임 계측이 서버가 아니라 httpx 클라이언트를 센다 | 직전 verifier 추가 | major | **해소 확인 (프로브)** |
+| A | 고정 임시 DB 경로 → 동시 pytest 프로세스 충돌 (+ 공유 `/tmp` 심링크 TOCTOU) | correctness[높음]+security[낮음] 병합 | major | **해소 확인 (프로브)** |
+| P | `COVERED_PACKAGES` 가 모듈 개명(`multipart`→`python_multipart`)에 false red | 게이트 라운드 2 | (신규 수정) | **해소 확인 (프로브)** |
+| Q | 생 소켓 응답 읽기(`await reader.read()`)에 타임아웃이 없다 — 서버가 안 닫으면 무한 대기 | 이번 verifier 추가 | — | **확정 minor** |
+| N | cryptography 음성 대조가 JWT·bcrypt 를 안 타는 트래픽에서 0 을 잰다 | 직전 verifier 추가 | minor | **미수정 — minor 유지 (2라운드째)** |
+| B | 세션 스코프 물리 sqlite 공유로 테스트 간 쓰기가 샌다 | correctness[높음] | minor | **미수정 — minor 유지 (재확인)** |
+| D | 실소켓 서버 2회 기동 + 파일 docstring("1개/유일한")이 실제 2개와 어긋남 | spec[낮음]+correctness[중간] | minor | **미수정 — minor 유지 (재확인)** |
+| O-1 | `dependency_overrides.clear()` 가 전량 삭제 | 직전 verifier 추가 | minor | **미수정 — minor 유지 (재확인)** |
+| O-2 | `len(res.content) > 0` 중복 단언 | 직전 verifier 추가 | minor | **해소 (삭제됨)** |
+| O-3 | 프레임 카운터가 두 곳에 중복 구현 | 직전 verifier 추가 | minor | **미수정 — 등급 하강 사유 있음 (아래)** |
+| C·F·G·E·H·I·J·K·L | 직전 라운드에서 **기각**된 것들 | 각 렌즈 | 기각 | 델타가 이 판정을 뒤집지 않음 (재확인) |
 
-| # | 계열 | 근거 |
-|---|---|---|
-| M | `test_real_socket_path_executes_h11` 이 세는 h11 프레임이 **서버가 아니라 httpx 클라이언트**의 것이다 — h11 커버리지 주장이 측정으로 뒷받침되지 않는다 | #6 테스트 품질 |
-| N | `test_known_uncovered_packages_stay_uncovered[cryptography]` 가 **JWT·bcrypt 를 안 타는 트래픽**에서 0 을 재서, 주장 범위와 표본이 다르다 | #6 테스트 품질 |
-| O | `dependency_overrides.clear()` 가 전량 삭제 / `len(res.content) > 0` 중복 단언 / 프레임 카운터 헬퍼 중복 구현 | #4 재사용 · #9 유지보수 |
+이번 델타에서 **새 blocker/major 는 나오지 않았다.** 새로 든 후보는 Q 하나이고 minor 로 확정했다.
 
 ---
 
 ## 반박 검증
 
-### [확정 · major] M — 실소켓 h11 프레임이 서버 것이 아니다
-`tests/test_http_socket.py:72-98`. docstring 은 "이 경로가 정말 h11 을 태우는지
-프레임으로 확인한다"고 적는데, 계측 스레드에는 uvicorn 서버와 **httpx 클라이언트가
-같이** 있다. httpx/httpcore 는 클라이언트 측 HTTP/1.1 파싱에 h11 을 쓴다.
+모든 판정은 프로브 실행이다. 기각(=버그 없음) 방향 프로브는 **양성 대조를 먼저 통과**시켰다
+(일부러 깨뜨린 변형에서 red 가 나는 것을 확인한 뒤 원본에 돌렸다). 프로브 파일은 전부
+`$TMPDIR/moru7probe/` 에 만들고 판정 후 삭제했다 (`git status --short` 에 잔재 없음).
 
-반박 시도 → 실패. **h11 을 전혀 안 쓰는 생 asyncio TCP 서버**에 같은 방식으로 요청해
-프레임을 셌다:
+### [확정 · 해소] M — h11 프레임 귀속
+
+수정: 요청을 `asyncio.open_connection` 생 소켓으로 바꾸고, `counts["client"] == 0`
+(httpx/httpcore 프레임 0)을 함께 단언하며, `uvicorn.Config(..., http="h11")` 로 서버
+파서를 못박았다 (`tests/test_http_socket.py:41,103-123`).
+
+직전 라운드가 **못 돌렸던 양성 대조**(httptools 미설치라 드리프트 서버를 못 만들었다)를
+이번에 만들었다 — `uvicorn.config.Config.load` 가 `http` 에 **클래스**를 그대로 받으므로
+(`if isinstance(self.http, str): ... else: self.http_protocol_class = self.http`),
+h11 을 전혀 안 쓰는 커스텀 `asyncio.Protocol` 을 서버 파서로 꽂고 테스트의 측정 블록을
+그대로 복제해 돌렸다:
 
 ```
-$ python probe_h11_attrib.py     # $TMPDIR, 판정 후 삭제
-바닐라 asyncio 서버(h11 전혀 미사용) 응답: 200 {'200': 'ok'}
-그럼에도 관측된 h11 프레임: 184
-→ 단언 `counts["h11"] > 0` 은 통과한다 (서버 무관)
+$ poetry run python $TMPDIR/moru7probe/probe_h11_drift.py
+[현재 코드 그대로 (http='h11')] protocol=<class 'uvicorn.protocols.http.h11_impl.H11Protocol'>
+    resp=b'HTTP/1.1 200 OK' h11=249 client=0 -> 테스트 GREEN
+[양성 대조: 서버가 h11 미사용]  protocol=<class '__main__.NoH11Protocol'>
+    resp=b'HTTP/1.1 200 OK' h11=0   client=0 -> 테스트 RED
+
+판정: 계측 유효 (진짜 초록 / 드리프트 red)
 ```
 
-즉 `assert counts["h11"] > 0` 은 서버가 h11 을 0 프레임 실행해도 초록이다.
-현재는 우연히 참이다 — `httptools` 미설치라 `uvicorn.Config(http="auto")` 가 h11 로
-떨어진다(실측 `protocol=uvicorn.protocols.http.h11_impl`). 그러나 누군가
-`uvicorn[standard]` 를 깔면 서버는 httptools 로 바뀌고 **이 테스트는 그대로 초록**이다.
-`osv-scanner.toml` 머리말이 "덮인다 h11 — `tests/test_http_socket.py` 가 이쪽을 맡는다"를
-**사실로 박아 두었으므로**, 그때 h11 0.16.0 업그레이드 판단이 검증되지 않은 초록 위에서
-내려진다. D-5("커버리지를 프레임으로 잰다 — 산문 주장은 못 믿는다")가 막으려던 바로 그
-실패 유형이 계측 안쪽에서 재발한 것이다.
+직전 라운드의 결함(“h11 안 쓰는 서버에서도 184 프레임”)이 **0 프레임으로 뒤집혔다.**
+클라이언트 가드도 발동을 직접 확인했다(변이 = httpx 로 되돌리기):
 
-제안 수정도 실행으로 확인했다 — 생 소켓 클라이언트(h11 미경유)로 바꾸면 관측 프레임이
-전부 서버 것이 된다:
 ```
-[uvicorn 기본(auto) — 생 소켓 클라이언트] protocol=uvicorn.protocols.http.h11_impl
-   resp=b'HTTP/1.1 200 OK' h11frames=215
+$ poetry run python $TMPDIR/moru7probe/probe_client_guard.py
+변이(httpx 클라이언트): h11=428 client=503 -> 가드 assert counts['client']==0 는 RED (발동)
 ```
-(양성 대조 `http="httptools"` 강제는 **미설치로 실행 불가** — 미확인으로 아래 §검증하지
-못한 것에 남긴다.)
 
-- `[major] tests/test_http_socket.py:96` — h11 프레임 단언이 서버가 아닌 httpx 클라이언트의
-  h11 도 세므로, 서버가 h11 을 안 써도 초록이다 (생 asyncio 서버에서 184 프레임 실측) —
-  `asyncio.open_connection` 으로 생 HTTP 바이트를 보내 클라이언트 측 h11 을 배제하고,
-  `uvicorn.Config(..., http="h11")` 로 서버 파서를 못박는다 (둘 다 하면 드리프트까지 닫힌다).
+(결정 로그가 적은 “503 프레임”과 실측이 일치한다.) → **해소.** `osv-scanner.toml` 이
+h11 을 “덮인다”로 되돌린 서술도 이제 근거를 갖는다.
 
-### [확정 · major] A — 고정 임시 DB 경로
-`tests/conftest.py:20` `_DB_FILE = os.path.join(tempfile.gettempdir(), "moru_oracle_test.db")`.
-PID/난수 접미사가 없어 같은 사용자의 모든 체크아웃·브랜치·에이전트가 같은 파일을 쓴다.
-`tests/conftest.py:66-73` `http_db`(session) 가 세션 시작에 그 파일을 `os.remove` 한다.
+### [확정 · 해소] A — 고정 임시 DB 경로
 
-반박 시도 → 실패. 동시 2 프로세스로 3회 반복, **3/3 재현**:
+수정: `tempfile.mkdtemp(prefix="moru_oracle_")` + `atexit` 로 디렉터리째 정리
+(`tests/conftest.py:26-30`), `http_db` 의 시작/끝 `os.remove` 제거.
+
+양성 대조를 **수정 전 트리로 직접** 만들었다 (`git archive d398d47` 로 레포 밖에 풀고
+같은 venv 로 동시 2프로세스 3라운드):
+
 ```
-$ pytest tests/test_http_{auth,pages,env,agent}.py -q  (A) & 동일 명령 (B) &
-=== round 1 ===  A exit=0 : 38 passed        B exit=1 : 36 passed, 2 errors
-=== round 2 ===  A exit=0 : 38 passed        B exit=1 : 36 passed, 2 errors
-=== round 3 ===  A exit=0 : 38 passed        B exit=1 : 36 passed, 2 errors
+##### 양성 대조: 수정 전 트리 (고정 파일명) #####
+old round 1  A exit=1 (36 passed, 2 errors) | B exit=0 (38 passed)
+old round 2  A exit=1 (36 passed, 2 errors) | B exit=0 (38 passed)
+old round 3  A exit=0 (38 passed)           | B exit=1 (36 passed, 2 errors)
 
-E sqlalchemy.exc.OperationalError: (sqlite3.OperationalError) table "KY_ATDC_L" already exists
-E sqlalchemy.exc.IntegrityError: UNIQUE constraint failed: KY_USER_L.USER_ID
+##### 수정 후 트리 (mkdtemp) #####
+new round 1  A exit=0 (38 passed) | B exit=0 (38 passed)
+new round 2  A exit=0 (38 passed) | B exit=0 (38 passed)
+new round 3  A exit=0 (38 passed) | B exit=0 (38 passed)
 ```
-"가정된 동시성"이 아니다 — 이 리뷰 라운드 동안 렌즈 finder 들이 같은 워킹트리에서
-동시에 스위트를 돌린 것이 관측됐다(finding E 참조: 한 finder 의 임시 파일이 다른
-finder 의 실행 로그에 나타났다). 즉 이 파이프라인 자체가 충돌 조건을 만든다.
 
-파급 방향은 **false red**(loud error, exit 1)라 조용한 통과는 아니다. 그럼에도 major 로
-두는 근거: 이 오라클의 존재 이유가 "의존성 올릴 때마다 자주 돌린다"인데, 자주 도는
-환경일수록 동시 실행 확률이 올라간다. 설계 스스로 "자주 안 도는 오라클은 오라클이
-아니다"라고 적었고, 이 결함은 그 빈도를 직접 깎는다.
+3/3 재현 → 3/3 클린. 심링크 TOCTOU 표면(병합분)도 `mkdtemp` 의 0700 프로세스 전용
+디렉터리로 같은 줄에서 닫혔다 — 다만 공격 재현은 이 머신에서 여전히 불가(§검증하지 못한 것 2).
 
-security 렌즈의 `/tmp` 심볼릭 링크 TOCTOU 는 **같은 라인·같은 원인**이라 병합했다.
-프로브는 안 돌렸다(공유 `/tmp` 다중 사용자 환경 재현은 이 머신에서 불가 — macOS 는
-`$TMPDIR` 가 사용자별). 별도 finding 으로 세지 않는 이유는 아래 한 줄 수정이 두 계열을
-동시에 지우기 때문이다.
+정리 누수도 확인했다: `--collect-only` 실행 + 소켓 테스트 실행 후 `$TMPDIR/moru_oracle_*`
+잔여 **0개**. `atexit` 가 fixture 를 안 쓰는 실행까지 덮는다. 하위 프로세스는 `subprocess.run`
+(fork 아님)이라 자식이 부모 디렉터리를 지우는 경로도 없다 (`grep -rn "multiprocessing\|os.fork" tests/` → 없음).
+→ **해소.**
 
-- `[major] tests/conftest.py:20` — 고정 임시 파일명이라 같은 사용자의 두 pytest 프로세스가
-  서로의 DB 를 지운다 (동시 2프로세스 3/3 재현, `table "KY_ATDC_L" already exists`) —
-  `tempfile.mkdtemp(prefix="moru_oracle_")` 하위에 파일을 두고 `http_db` teardown 에서
-  디렉터리째 지운다 (다중 사용자 `/tmp` 심볼릭 링크 TOCTOU 도 같은 줄에서 닫힌다).
+### [확정 · 해소] P — 모듈 개명 false red
 
-### [확정 · minor] N — cryptography 음성 대조의 표본이 주장 범위와 다르다
-`tests/test_http_env.py:98-125` 는 `/login`(GET) 과 `/attendee/202601` 두 요청만 때리고
-`counts["cryptography"] == 0` 을 단언한다. 두 경로 모두 **JWT 발급/검증도 bcrypt 도 안 탄다** —
-주장("이 앱에 cryptography 실행 경로가 없다. HS256=stdlib `hmac`, 비번=`bcrypt` 패키지")이
-가리키는 코드가 표본에 아예 없다.
+`COVERED_PACKAGES` 가 동의어 튜플을 받게 바뀌었다(`tests/test_http_env.py:28,46,96-100`).
+현재 설치본은 `python-multipart 0.0.9`(모듈 `multipart`)라 개명 시나리오를 실행으로 못
+만들지만, tracer 가 보는 것은 `frame.f_code.co_filename` 뿐이므로 합성 프레임으로 잰다:
 
-주장 자체는 참인지 프로브로 확인했다 — 실제 bcrypt+JWT 트래픽에서도 0이다:
 ```
-login=200 admin=200  프레임: {'bcrypt': 1, 'jwt': 19}
-→ 실제 bcrypt/JWT 경로에서 cryptography 프레임 = 0
+$ poetry run python $TMPDIR/moru7probe/probe_alias.py
+현재 코드 (동의어 튜플):
+  개명 후 경로 → {'multipart': 3}
+  개명 전 경로 → {'multipart': 3}
+  무관 경로   → {}            (0 = 오탐 없음)
+양성 대조 — 수정 전 코드(단일 이름 'multipart'):
+  개명 후 경로 → {}           (= 0, false red 재현)
 ```
-따라서 `osv-scanner.toml` 머리말의 서술은 **사실이다**. 결함은 주장이 아니라 그 주장을
-지키는 회귀 감지기가 헛돈다는 것 — 나중에 RS256 으로 바꿔도 이 테스트는 계속 0 을 보고한다.
 
-M 과 **같은 계열**이다: 둘 다 "프레임 계측의 귀속·표본이 주장 범위와 어긋난다".
-`AGENTS.md` § 리뷰-수정 루프 상한 규칙 4 대로, 라인 패치 2개가 아니라 계열을 없애는
-한 가지 구조로 제안한다 — **양·음 계측을 같은 트래픽 위에서, 클라이언트 측 프레임을
-배제한 채 잰다.**
+수정 전 코드가 개명 경로에서 0 을 재 `missing` 에 올라간다(=업그레이드하는 순간 red)는
+주장이 그대로 재현됐고, 수정 후는 양쪽을 센다. 오탐 방향(무관 패키지 계수)도 0. → **해소.**
 
-- `[minor] tests/test_http_env.py:117-118` — 음성 대조가 JWT·bcrypt 를 안 타는 요청 2개에서만
-  0 을 재서 cryptography 주장의 회귀를 못 잡는다 — 양성 테스트(`:73-86`)와 **같은 요청
-  시퀀스**(login POST + 토큰 GET)를 쓰게 통일한다.
+### [확정 · minor] Q — 생 소켓 읽기에 타임아웃이 없다 (verifier 신규, 자기 지적도 반박 절차 적용)
 
-### [확정 · minor] B — 세션 공유 DB 로 테스트 간 쓰기가 샌다
-`tests/conftest.py:66`(session `http_db`) 위에 `:77`(function `seeded_app`)이 얹혀,
-한 pytest 프로세스 안에서 모든 테스트가 같은 물리 sqlite 를 공유한다.
-레포 밖 pytest 플러그인(`pytest_runtest_teardown` 에서 파일을 read-only 로 열어 행 수 출력)으로
-누수를 직접 관측했다:
+`tests/test_http_socket.py:113` `raw = await reader.read()` 는 EOF 까지 무한 대기한다.
+`pytest-timeout` 미설치이고 `[tool.pytest.ini_options]` 에 전역 타임아웃이 없다.
+
+반박 시도 → 부분 성공(=등급 하강). “서버가 `Connection: close` 를 안 지킬 리가 없다”가
+반박이었고, 실제로 `http="h11"` 을 못박은 지금 그 확률은 낮다. 그러나 **이 오라클의 존재
+이유가 “h11 을 올릴 때 돌린다”**라, 파서 동작이 바뀌는 바로 그 순간이 이 경로의 위험 구간이다.
+그때 얻는 것이 red 가 아니라 **행(hang)** 이면 오라클이 판정을 못 낸다. 재현:
+
 ```
-[LEAK] after test_write_route_accepts_a_valid_token: KY_ATDC_L rows = 2
-[LEAK] after test_login_page_renders_html:           KY_ATDC_L rows = 2
-[LEAK] after test_excel_export_streams_a_workbook:   KY_ATDC_L rows = 2
+$ poetry run python $TMPDIR/moru7probe/probe_hang.py
+read() 가 3초 안에 안 끝났다 -> 현재 테스트 코드는 여기서 무한 대기
+(pytest 전역 timeout 없음: pytest_timeout 미설치)
 ```
-누수는 실재한다. **그러나 지금 깨지는 것은 없다** — 순서 의존을 반박 방향으로 검증했다:
-```
-정방향 40 passed / 역순 40 passed / 파일 단독 23·6·5·4·2 전부 passed / 전체 282 passed
-```
-양성 대조 대신 기전으로 확인: `app/dao/functions.py:37-41 save_attendees` 가
-delete-then-insert 라 반복 실행이 멱등이고, 내용/행수를 단언하는 테스트가 하나도 없다.
-설계도 세션 스코프 DB 를 명시적으로 골랐다(§통합 계획 `_engine(session)`) — **설계 위반이
-아니다.** 잠재 함정이므로 minor 로 확정하고 후속.
 
-- `[minor] tests/conftest.py:66` — 세션 스코프 물리 sqlite 를 함수 스코프 앱이 공유해
-  쓰기가 테스트 간에 남는다(행 수 실측). 지금은 내용 단언이 없어 무해하나, 나중에 export
-  행수·attendee 개수를 단언하면 실행 순서 의존 오라클이 된다 — 그때 함수 스코프 트랜잭션
-  롤백으로 감싸거나, 최소한 conftest 에 이 제약을 주석으로 못박는다.
+깨지는 방향이 “조용한 초록”이 아니라 “멈춤”이고 현재 파서가 고정돼 있으므로 **minor**.
 
-### [확정 · minor] D — 실소켓 서버가 2번 뜬다 / docstring 이 사실과 다르다
-`tests/test_http_socket.py:1` 파일 docstring 은 "**실소켓 스모크 1개** — h11 을 실제로
-태우는 **유일한** 테스트"라고 적지만 실제로는 테스트가 2개고 `live_server` 가
-function-scope 라 uvicorn 이 2번 뜬다. 비용은 무시할 만하다(총 ~0.5s, 실측 setup 0.27s
-+ teardown 0.18s/0.17s). 자원 낭비로는 기각하고, **다음 사람이 읽는 문장이 파일 내용과
-어긋난다**는 #9 축으로만 minor 확정. M 을 고칠 때 `live_server` 를 module-scope 로
-올리면 서술과 구현이 동시에 맞는다.
+- `[minor] tests/test_http_socket.py:113` — 응답 읽기에 상한이 없어, 서버가 연결을 안 닫는
+  상황(h11 업그레이드 회귀 등)에서 테스트가 red 대신 무한 대기한다 (3초 프로브로 재현) —
+  `raw = await asyncio.wait_for(reader.read(), timeout=5)` 로 감싼다.
 
-- `[minor] tests/test_http_socket.py:1,29` — docstring 의 "1개/유일한"이 실제 2개 테스트·
-  uvicorn 2회 기동과 어긋난다 — `live_server` 를 module-scope 로 올리고 문구를 맞춘다.
+### [확정 · minor · 2라운드째] N — cryptography 음성 대조 표본
 
-### [확정 · minor] O — 잔재 3건
-- `[minor] tests/conftest.py:107` — `dependency_overrides.clear()` 가 **전량** 삭제라, 다른
-  테스트가 자기 오버라이드를 걸어 두면 같이 지워진다 — 현재 사용처가 없어 무해하나
-  `pop(key, None)` 2회가 더 정확하다.
-- `[minor] tests/test_http_pages.py:61` — `assert res.content[:2] == b"PK"` 뒤의
-  `assert len(res.content) > 0` 은 앞 단언에 이미 함의된다 — 삭제.
-- `[minor] tests/test_http_socket.py:78-87` — `tests/test_http_env.py:39 _count_frames` 와
-  같은 프레임 카운터를 인라인으로 다시 구현했다(체크리스트 #4) — M 수정 시 한쪽으로 모은다.
+`tests/test_http_env.py:119-135` 는 여전히 `/login`(GET) + `/attendee/202601` 두 요청에서만
+`counts["cryptography"] == 0` 을 잰다 — 둘 다 JWT 발급/검증도 bcrypt 도 안 탄다. 직전 라운드가
+“M 과 같은 계열이니 같은 수정 안에서 닫아라”라고 적었으나 닫히지 않았다.
 
-### [기각] C — `/docs`·`/openapi.json`·`/redoc` 을 오라클이 안 본다
-노출 자체는 실행으로 재확인했다: 무토큰 `GET /docs` → **200 (939B)**,
-`/openapi.json` → **200 (6082B)**, `/redoc` → **200 (891B)**.
+기각 시도 → 실패(주장 자체는 여전히 참, 감지기만 헛돈다). 직전 라운드가 실제 bcrypt+JWT
+트래픽에서 cryptography 0 프레임을 실측했으므로 `osv-scanner.toml` 서술은 사실이다.
+결함은 “나중에 RS256 으로 바꿔도 이 테스트가 계속 0 을 보고한다”는 회귀 감지 실패뿐이다.
+등급을 올릴 근거(지금 깨지는 것)가 없어 **minor 유지**. 다만 **같은 계열 지적이 2라운드째**
+라는 사실은 기록한다 — 다음에 또 나오면 라인 패치가 아니라 “양·음 계측을 같은 트래픽 위에서
+잰다”는 구조 변경으로 가야 한다.
 
-기각 근거 3가지:
-1. **주장의 전제가 거짓이다.** finder 는 "오라클이 *인증 걸린 라우트 전수*를 자처한다"고
-   했지만, `tests/test_http_auth.py:16-24` 는 2단계 라우트 표(= `app/controller/router.py` 에
-   등록된 앱 라우트)에서 뽑은 목록이라고 명시한다. `/docs`·`/openapi.json`·`/redoc` 는
-   FastAPI 내장 자동 라우트이고 **인증이 걸려 있지 않다** — "인증 필수 라우트"에 애초에
-   속하지 않으므로 목록 누락이 아니다. `PUBLIC_GET_ROUTES` 도 전수를 자처하지 않는다.
-2. **이 diff 의 결함이 아니다.** 노출한 것은 앱 코드이고 이번 변경은 `app/` 무수정(C-1)이다.
-3. **테스트로 고정하는 것이 오히려 해롭다.** 이 오라클의 목적은 업그레이드를 **막지 않는**
-   것이다(A-10 이 프레임 수를 하한만 재는 이유와 같다). `/docs` 200 을 단언으로 박으면
-   나중에 `FastAPI(docs_url=None)` 로 닫을 때 이 테스트가 red 로 그것을 막는다 —
-   같은 브랜치가 `/admin/attendee/export`(무날짜) 건에서 이미 겪은 함정이다.
+- `[minor] tests/test_http_env.py:127-128` — 음성 대조 표본이 주장 범위(JWT·bcrypt 경로)를
+  안 포함해 cryptography 회귀를 못 잡는다 — 양성 테스트(`:74-92`)와 같은 요청 시퀀스
+  (login POST + 토큰 GET)를 쓰게 통일한다.
 
-→ 이번 diff 의 finding 아님. **앱 후속 과제**로만 남긴다: 프로덕션에서 `/docs`·`/redoc`·
-`/openapi.json` 을 닫을지 사람이 판단한다(내부 도구라 실질 위험도는 사람 판단 영역).
+### [확정 · minor · 재확인] B — 세션 공유 DB 쓰기 누수
 
-### [기각] F, G — 설계의 픽스처 구조와 다르게 구현됐다
-설계 §통합 계획이 `seeded_admin(session)` / `client(function)` / `tokens(function)` 세
-픽스처를 적었는데 실제는 `seeded_app`(function) 하나 + `valid_token` + 모듈 함수 2개다.
+`tests/conftest.py:76-82`(session `http_db`) + `:85`(function `seeded_app`) 구조는 그대로다.
+`mkdtemp` 수정은 **프로세스 간** 충돌만 없앴고 **프로세스 내** 누수는 설계가 명시적으로 고른
+것이다(§통합 계획). 이번 라운드에 정방향/역순/파일 단독/전체 282 를 다시 돌려 순서 의존이
+없음을 재확인했다. → minor 유지.
 
-기각 근거: 설계가 `seeded_admin` 을 **세션 스코프로 분리한 이유가 "bcrypt 는 비싸다"** 라고
-명시돼 있다(§통합 계획 주석). 그 목적이 달성됐는지를 런타임으로 확인했다 — 40 테스트가
-**1.58s** 에 끝난다. bcrypt cost 12 해시가 테스트마다 돌면 40 × ~0.25s ≈ 10s 여야 한다.
-`tests/conftest.py:82 if existing is None` 가드 + 세션 지속 DB 조합으로 해시는 세션당 1회다.
-설계 의도가 충족됐고 기능도 동등하므로 구조 차이만으로 finding 을 세우지 않는다
-(§Rules "취향 지적 금지"). G 도 같다 — fixture 냐 모듈 함수냐는 커버리지에 영향이 없고,
-`04-test-audit.md` 가 AC-4 커버를 이미 확인했다.
+- `[minor] tests/conftest.py:76` — 세션 스코프 물리 sqlite 를 함수 스코프 앱이 공유해 쓰기가
+  테스트 간에 남는다 — 지금은 내용 단언이 없어 무해하나, export 행수·attendee 개수를 단언하는
+  테스트가 생기면 순서 의존 오라클이 된다. 그때 함수 스코프 롤백으로 감싸거나 이 제약을
+  conftest 에 못박는다.
 
-### [기각] E — `tests/ztmp_probe_test.py`
-현재 존재하지 않는다: `git status --short` 에 없고 `ls tests/ | grep -i ztmp` 무결과.
-security 렌즈 finder 가 자기 프로브로 만들었다가 지운 파일이다(security 산출물 §판정 방식이
-"판정 후 삭제"라고 자백한다). 이 diff 의 결함 아님 → **무효**.
+### [확정 · minor · 재확인] D — 실소켓 서버 2회 기동 / docstring 불일치
 
-**다만 사실 자체는 기록할 값어치가 있다** — spec finder 가 그 파일을 목격했고 correctness
-finder 의 전체 스위트 로그에도 나타났다 사라졌다. 즉 **렌즈 finder 3명이 같은 워킹트리에서
-동시에 pytest 를 돌렸다는 실행 증거**이고, 그것이 finding A(고정 임시 DB 경로)가 가정이
-아니라 이 파이프라인의 상시 조건임을 뒷받침한다. 부수 교훈: finder 프로브도 레포 밖에
-만들어야 한다(`.agents/07-review.md` §1-1 이 verifier 에게만 그렇게 지시하고 finder 에게는
-안 한다 — 스테이지 파일 후속 후보).
+`tests/test_http_socket.py:1,8` 이 “**실소켓 스모크 1개** … **유일한** 테스트”, “**하나만 둔다**”
+라고 적는데 파일에는 테스트가 2개이고 `live_server` 가 function-scope 라 uvicorn 이 2번 뜬다
+(`grep -c "^async def test_" → 2`). `03-design.md:66,103` 도 “실소켓 h11 스모크 1개 / 1개만 둔다”다.
+비용은 무시할 만하다(파일 전체 0.70s, 5회 재실행 동일). #9(다음 사람이 읽는 문장이 파일과
+어긋난다) 축으로만 minor 유지 — 이번 수정이 이 문장을 건드리지 않았으므로 **직전 라운드와
+동일 등급**이다.
 
-### [기각] H — R-5 "토큰=관리자" 불변식의 음성 테스트 없음
-`KY_USER_L` 에 비관리자 행을 넣는 라우트가 앱에 없다(가입·초대 기능 부재, `app/controller/router.py`
-13개 등록 전수 확인). 지금 쓸 수 있는 음성 테스트가 존재하지 않는다. 설계가 R-5 각주로
-이미 "이 규칙은 데이터 불변식에 기댄다"를 명시했고 security finder 자신도 "지금 당장 고칠
-결함은 아니다"라고 적었다. → 한계 표기로 충분, finding 아님 (아래 §검증하지 못한 것 이관).
+- `[minor] tests/test_http_socket.py:1,8,29` — docstring·설계의 “1개/유일한/하나만 둔다”가 실제
+  테스트 2개·uvicorn 2회 기동과 어긋난다 — 두 단언을 한 테스트로 합치거나(설계대로 1개),
+  `live_server` 를 module-scope 로 올리고 문구를 실제에 맞춘다.
 
-### [기각] I — `_free_port()` TOCTOU (추론 판정)
-`tests/test_http_socket.py:22-26` 이 포트를 받아 닫고 uvicorn 이 나중에 바인드한다.
-실행 불가 판정 사유: 커널 포트 재할당 타이밍을 결정적으로 강제할 수단이 이 스택에 없다
-(양성 대조를 만들 수 없어 프로브가 무효가 된다). 순차 3회 + 동시 2회 실행에서 재현 0.
-`bind(0)` 후 즉시 재바인드는 표준 관행이고 대안(소켓을 열어 둔 채 uvicorn 에 fd 를 넘기기)은
-uvicorn 재기동 경로를 복잡하게 만든다 — 비용이 이득을 넘는다. → 기각, 기록만.
+### [확정 · minor · 재확인] O-1 — `dependency_overrides.clear()`
 
-### [기각] J, K, L
-- **J** `os.environ` 미복원: 설계 D-3 이 선택한 구조 그 자체다. 전체 스위트 **282 passed**
-  로 회귀 0 을 직접 확인했다(기존 242개 포함). 결함 아님.
-- **K** 만료 토큰 collection-time 계산: finder 스스로 하강했고 나도 동의한다 —
-  `exp = now - 1h` 라 실행이 늦어질수록 **더 확실히** 만료다. 깨지는 방향이 아니다.
-- **L** security 렌즈의 "확인됨/해당 없음" 항목들(IDOR 없음, mass assignment 없음, 사용자
-  열거 없음, 500 응답에 내부 정보 없음): 아래 authz 프로브로 독립 재확인했다. finding 아님.
+`tests/conftest.py:116` 은 여전히 전량 삭제다. 현재 다른 오버라이드 사용처가 없어 무해
+(전체 282 passed 로 재확인). → minor 유지.
+
+- `[minor] tests/conftest.py:116` — 전량 `clear()` 라 다른 테스트가 건 오버라이드까지 지운다 —
+  `pop(db.get_db_session, None)` / `pop(get_session, None)` 2회가 더 정확하다.
+
+### [기각 · 등급 하강] O-3 — 프레임 카운터 중복 구현
+
+직전 라운드는 `tests/test_http_env.py::_count_frames` 와 소켓 테스트의 인라인 tracer 를
+중복(#4 재사용)으로 봤다. 이번 수정 뒤 두 계측기는 **하는 일이 달라졌다** — env 쪽은 동의어
+튜플을 다루는 다중 패키지 카운터이고, 소켓 쪽은 “h11 이냐 / 클라이언트 라이브러리냐”를 가르는
+`elif` 분기(귀속 판별)다. 한쪽으로 합치면 후자를 위해 전자에 분기 파라미터를 넣어야 해서
+**요구에 없는 유연성**(체크리스트 #5)이 늘어난다. 둘 다 10줄 미만이다. → 중복 finding 기각,
+현행 유지가 더 싸다.
+
+### [기각 · 재확인] 직전 라운드의 기각 판정들 (C·F·G·E·H·I·J·K·L)
+
+델타가 이 판정들의 전제를 건드리지 않았다: 앱 코드 무수정(C·H·L), 픽스처 구조 미변경(F·G),
+`_free_port()` 미변경(I), env 미복원 구조 미변경(J — 전체 282 passed 로 회귀 0 재확인),
+만료 토큰 계산 미변경(K), `ztmp_probe_test.py` 부재 재확인(E: `git status --short` 에 없음).
+→ 기각 유지.
 
 ### [필수] authz 프로브 — 무토큰 + 타인 자격
-diff 에 신규/변경 엔드포인트는 없지만(앱 무수정) `.agents/07-review.md` §1-1 의 상시 실행
-규정대로 돌렸다. 인증 필수 6개 라우트 × 자격 6종:
+
+diff 에 신규/변경 엔드포인트가 없지만(앱 무수정) §1-1 의 **상시 실행** 규정대로 다시 돌렸다.
+인증 필수 6라우트(GET 3 + POST 3) × 자격 6종:
 
 ```
-no-token   / forged / expired / garbage / empty   × {GET,POST} 인증 6라우트
-  → 36/36 전부 307 Location: /login  (보호 리소스 바디 0)
-AUTHZ VIOLATIONS: NONE
+$ poetry run python $TMPDIR/moru7probe/probe_authz.py
+no-token   -> [307]  거부아닌것=none
+forged     -> [307]  거부아닌것=none
+expired    -> [307]  거부아닌것=none
+garbage    -> [307]  거부아닌것=none
+empty      -> [307]  거부아닌것=none
+AUTHZ VIOLATIONS: NONE (307 = /login 리다이렉트 거부)
 ```
-307 은 `401/403/404` 가 아니지만 **거부**다: `app/main.py:49-51` 의 401 핸들러가
-`RedirectResponse(url='/login')` 로 바꾼 결과이고(R-1, 설계가 고정한 현행 동작),
-응답에 보호 리소스가 실리지 않음을 바디 길이로 확인했다. blocker 아님.
 
-한 가지 관측을 기록한다 — **DB 에 없는 사용자명으로 서명한 유효 토큰은 관리자 권한을 얻는다**:
+307 은 401/403/404 가 아니지만 **거부**다 — `app/main.py:49-51` 의 401 핸들러가
+`RedirectResponse('/login')` 으로 바꾼 현행 동작이고(R-1), 보호 리소스가 바디에 실리지
+않음을 길이로 확인했다.
+
+**타인 자격**(= DB 에 없는 사용자명으로 서명한 유효 토큰)은 직전 라운드와 동일하게 통과한다:
+
 ```
-ghost-user(valid sig)  GET/POST 인증 6라우트 → 전부 200
+other-user(mallory) GET /admin/attendee              -> 200 (51042B)
+other-user(mallory) GET /admin/attendee/202601       -> 200 (49517B)
+other-user(mallory) GET /admin/attendee/export/202601 -> 200 (5694B)
+POST /admin/attendee 도 인증을 통과해 DAO 까지 도달 (빈 바디라 DB 제약에서 500)
 ```
-`app/util/auth.py:40-46 get_current_user` 는 토큰을 디코드만 하고 `KY_USER_L` 존재 여부를
-조회하지 않는다. 다만 토큰은 `SECRET_SALT` 를 알아야 만들 수 있고 발급 경로는 비밀번호를
-검증하는 로그인뿐이라 **IDOR 도 권한 상승도 아니다** — 이 앱의 무상태 JWT 설계(R-5 이진
-모델)의 귀결이다. 앱 무수정 diff 의 결함이 아니므로 finding 아님. 실질 의미는
-**토큰 폐기(revocation) 수단이 없다**는 것 — 사용자를 지워도 발급된 토큰은 만료까지 산다.
-앱 후속 과제로만 남긴다.
+
+`app/util/auth.py:40-46 get_current_user` 가 토큰을 디코드만 하고 `KY_USER_L` 조회를 안 한다.
+**이 diff 의 결함은 아니다** — 앱 무수정이고, 토큰은 `SECRET_SALT` 를 알아야 만들 수 있으며
+발급 경로는 비밀번호를 검증하는 로그인뿐이라 권한 상승·IDOR 이 아니다. 실질 의미는 **토큰
+폐기 수단이 없다**(사용자를 지워도 발급된 토큰은 만료까지 산다)는 것이고, 앱 후속 과제로 남긴다.
 
 ---
 
-## 체크리스트 #6 테스트 품질 · #9 유지보수 (렌즈 배정 없음 — verifier 직접)
+## Finder 원출력
+
+이 라운드는 §4-1 **델타 재리뷰**라 finder 3명을 재실행하지 않았다. 아래는 **직전 라운드
+(2026-08-02)** 렌즈 산출물의 finding 목록을 파일 경로와 함께 옮긴 것이다 — 원문은 각 파일이
+소유한다.
+
+### spec-일치 — `.agents/context/artifacts/http-auth-oracle/07-finder-spec.md`
+
+- [낮음] `tests/ztmp_probe_test.py`(untracked) — 설계 § 통합 계획 파일 목록에 없는 파일이
+  LOCK 대상 `tests/` 에 존재. 다른 finder 의 프로브 잔재로 보임.
+- [낮음] `tests/test_http_socket.py` 전체 — 설계가 “실소켓은 1개만 둔다”인데 function-scope
+  `live_server` 를 쓰는 테스트가 2개라 uvicorn 기동이 2회다.
+- [중간] `tests/conftest.py:76-107 seeded_app` — 설계는 `seeded_admin(session)` + `client(function)`
+  **별도 픽스처**인데 실제는 하나의 function-scope `seeded_app` 으로 합쳤다.
+- [낮음] `tests/conftest.py` / `tests/test_http_auth.py` — 설계의 `tokens(valid/expired/forged)`
+  fixture 가 `valid_token` fixture 1개 + 모듈 레벨 일반 함수 2개로 구현됐다.
+- 지적 없음으로 명시 확인한 것: FR-1~FR-6·AC-1~AC-9 누락 없음, 기능 1~11 누락 없음,
+  가정 A-1~A-10 불일치 없음, `app/`·`pyproject.toml` 변경 0건, 라우트 표 일치,
+  `osv-scanner.toml` “40개” = `--collect-only` 실측 일치, 40 passed.
+
+### correctness — `.agents/context/artifacts/http-auth-oracle/07-finder-correctness.md`
+
+- [높음] `tests/conftest.py:70` fixture 스코프 불일치 — session `http_db` 위에 function
+  `seeded_app` 이라 한 프로세스 안 모든 테스트가 같은 물리 sqlite 를 공유, 쓰기가 샌다
+  (레포 밖 스크립트로 export 길이 5695→5732 변화 관측). 지금 깨지는 테스트는 없음.
+- [높음] `tests/conftest.py:16` 고정 임시 DB 파일 경로 — 동시 2프로세스에서
+  `table "KY_ATDC_L" already exists` 재현. 리뷰 세션 중 실제 동시 실행이 관측됐다는 방증 포함.
+- [중간] `tests/test_http_socket.py:29` 실소켓 스모크가 설계 의도(“하나만 둔다”)와 달리 2개
+  테스트가 각각 uvicorn 을 띄운다 (`--durations` 실측 setup 0.27s + teardown 0.18/0.17s).
+- [낮음] `tests/conftest.py:34` `os.environ.update()` 미복원 — 설계 D-3 이 고른 구조, 회귀 0 재확인.
+- [낮음] `tests/test_http_socket.py:22` `_free_port()` ↔ uvicorn 바인드 TOCTOU (추론, 재현 안 됨).
+- [낮음] `tests/test_http_auth.py:83` 만료 토큰 collection-time 계산 — 확인 결과 버그 아님(자체 하강).
+- [정보] 단언 정확성 표본 점검 — 401 핸들러 307, 오버라이드 키 2개 전수, `/agent/*` 200+error 전부 일치.
+- 검증하지 못한 것: pytest-xdist 워커 병렬 거동, CI 매트릭스에서의 실제 충돌 빈도.
+
+### security + 규칙 — `.agents/context/artifacts/http-auth-oracle/07-finder-security.md`
+
+- [낮음] `tests/conftest.py:20` 고정 `/tmp` 경로 — 공유 `/tmp` 리눅스에서 심링크 TOCTOU 클래스.
+  제안: `tempfile.mkdtemp(prefix="moru_oracle_")`.
+- [높음] `/docs`·`/openapi.json`·`/redoc` 무인증 200(실행 확인) — 오라클의 라우트 목록 어디에도 없다.
+- [중간] R-5 “토큰=관리자”가 데이터 불변식에 기대는데 음성 테스트가 없다(지금은 작성 불가).
+- [높음·확인됨] mass assignment 해당 없음 — `POST /admin/attendee` 는 `.get()` 3필드만 뽑는다(프로브).
+- [높음·확인됨] IDOR 해당 없음 — 역할·소유자 컬럼 부재, `cal_date` 는 리소스 ID 가 아니라 달력 월.
+- [낮음·확인됨] 잘못된 `cal_date` → 500 이지만 바디는 `Internal Server Error` 뿐(정보 누출 없음).
+- [중간·확인됨] 사용자 열거 없음 — 없는 사용자/틀린 비번 모두 동일 401→307.
+- [낮음] `TEST_ENV` 시크릿 더미 값, 커밋된 실 시크릿 없음.
+- [낮음] LLM 키 빈 문자열 강제 + 가드 테스트 — 방어 구조 적절.
+- [낮음] 실소켓 서버 `127.0.0.1` + 커널 배정 포트 — 외부 노출 없음.
+- [정보] `/agent/confirm` 의 `kwargs` 파라미터 인젝션은 tool 레지스트리 내부까지 안 봤다.
+- 엔드포인트별 ①~④ 순회표 포함(원문 참조). 숨은 결합 추가 발견: 없음.
+
+### 심층 적대 렌즈
+
+**비게이트 — 미실행** (`03-design.md` 게이트 판정). §1-1 의 “비게이트·사소 변경엔 생략” 규정대로다.
+
+---
+
+## 체크리스트 #6 테스트 품질 · #9 유지보수
+
+렌즈 배정이 없어 verifier 가 직접 커버한다 (델타 범위 + 델타가 바꾼 단언).
 
 ### #6 테스트 품질
-- **약화된 assertion 스윕**: `04-test-audit.md` 가 지적한 2건(env 프로브 상태 미단언,
-  pages 중복 폼 테스트)은 현재 코드에 반영돼 있다(`test_http_env.py:74·78·86` 상태 단언 존재,
-  pages 에 중복 없음). 새로 찾은 약화 단언은 위 M·N·O 뿐이다.
-- **자기 기대만 검증하는 테스트**: `test_config_uses_the_mock_values...`,
-  `test_llm_keys_are_empty_in_tests` 는 앱이 아니라 하네스를 검증한다. 그러나 AC-1·AC-8 이
-  명시적으로 요구한 가드이고, 후자는 **없으면 뒤 테스트가 실제 유료 호출을 낸다**(이 브랜치
-  실측 사고). 정당 — finding 아님.
-- **양성/음성 짝**: 잘 잡혀 있다. `test_expired_and_forged_are_distinguishable_below_http`
-  가 유효 토큰 왕복 양성 대조를 포함해 "`decode_token` 이 항상 던지는" 구현을 배제한다.
-  `test_login_rejects_a_username_that_does_not_exist` 는 4단계 뮤테이션에서 실제로
-  뚫렸던 자리(`get_password` 의 WHERE 삭제)를 정확히 겨냥한다 — 뮤테이션 근거가 주석에
-  남아 있어 다음 사람이 이 테스트를 지우지 않는다. 좋은 자산이다.
-- **상호 대조 구조**: `test_known_uncovered_packages_stay_uncovered[h11]`(ASGI 에서 0)과
-  `test_real_socket_path_executes_h11`(실소켓에서 >0)이 짝이라, 프레임 매칭 패턴
-  (`/site-packages/{pkg}/`)이 어떤 설치 레이아웃에서 통째로 안 맞으면 최소 한쪽이 red 가 된다 —
-  공허한 초록으로 무너지지 않는다. 의도된 설계로 판단, finding 아님.
-- **결정성**: 정방향·역순·파일 단독·전체 스위트 전부 재실행해 동일 결과 확인.
+
+- **약화된 단언 스윕(델타)**: 이번 델타는 단언을 **강화**했다 — 소켓 테스트에
+  `raw.startswith(b"HTTP/1.1 200")` 과 `counts["client"] == 0` 이 새로 생겼고, 둘 다 변이에서
+  red 가 나는 것을 실행으로 확인했다(위 M). 삭제된 단언은 `len(res.content) > 0` 하나이고
+  앞줄 `res.content[:2] == b"PK"` 에 함의되므로 커버리지 손실 0.
+- **완화 방향 점검**: `COVERED_PACKAGES` 의 동의어 튜플은 매칭을 **넓히는** 변경이라 “느슨해진
+  것 아닌가”를 따로 쟀다 — 무관 패키지 경로에서 계수 0(위 P 프로브)이라 오탐 통로가 아니다.
+  넓힌 대상이 같은 배포판의 개명 전/후 두 이름뿐이다.
+- **양성/음성 짝 유지**: `test_known_uncovered_packages_stay_uncovered[h11]`(ASGI 0) ↔
+  `test_real_socket_path_executes_h11_in_the_server`(실소켓 >0) 짝이 그대로다. 이제 후자가
+  서버를 재므로 짝의 의미가 처음으로 성립한다.
+- **결정성**: 소켓 파일 5회 연속 동일, 파일 역순 40 passed, 전체 282 passed. flaky 징후 없음.
+- **남은 약점**: N(음성 대조 표본)과 Q(무한 대기) — 위 finding.
 
 ### #9 유지보수
-- 파일 5개 총 518줄, 최장 178줄. 테스트 함수는 전부 10줄 내외 — 읽기 난이도 문제 없음.
-- 네이밍이 문장형(`test_no_token_is_redirected_to_login`)이라 실패 출력만 보고 뜻이 읽힌다.
-  번호 약어 없음.
-- **docstring 이 "왜"를 소유한다** — 307 인 이유, `:memory:` 를 안 쓰는 이유, 하한만 재는
-  이유, 키를 비우는 이유가 전부 코드 옆에 있고 근거 문서를 지목한다. 이 레포에서 다음 사람이
-  가장 헤맬 자리들이 정확히 커버됐다.
-- 유일한 유지보수 결함이 위 D — **docstring 이 파일 내용과 어긋나는 한 곳**이다.
-  나머지는 문서와 코드가 일치한다(`osv-scanner.toml` "40개" ↔ `pytest --collect-only` 40 실측).
+
+- 델타의 주석이 “왜”를 소유한다: `mkdtemp` 주석이 실측 재현(3/3)을, `http="h11"` 주석이 우연
+  배제 이유를, 소켓 docstring 이 **틀렸던 이력과 무엇이 왜 바뀌었는지**를 적는다. 다음 사람이
+  이 계측기를 되돌리지 않게 막는 자산이다.
+- `_count_frames` 의 동의어 처리(`(p[0], tuple(p)) if isinstance(p, tuple) else (p, (p,))`)와
+  `missing` 계산의 삼항 2회는 읽기 부담이 있으나 함수가 짧고 docstring 이 규칙을 한 줄로
+  적어 이해 가능하다. 취향 지적 범위라 finding 으로 세우지 않는다.
+- **유일한 #9 결함은 D** — 파일 docstring 과 설계의 “1개/유일한/하나만 둔다”가 실제 2개와
+  어긋난 채 두 라운드째 남아 있다.
+- 프로세스 관측(코드 결함 아님, 기록만): `.agents/context/locks/http-auth-oracle.lock` 이
+  **이 재리뷰 이전에** 삭제되고 PR 이 열렸다. 결정 로그가 “7단계 렌즈·verifier 를 다시 돌리지는
+  않았다”고 스스로 적어 두었고 이번 라운드가 그 공백을 메운다. `TEST_LOCK_OVERRIDE=1` 사용도
+  사람 승인과 함께 결정 로그에 기록돼 있어 §4 라우팅(테스트 품질 finding → 사람 승인 →
+  4단계 수정)과 어긋나지 않는다.
+
+---
+
+## 검증하지 못한 것
+
+1. **실제 `httptools` 설치 환경은 여전히 미확인.** 드리프트 양성 대조는 커스텀 프로토콜
+   클래스로 대신했다 — h11 을 안 쓰는 서버에서 계측이 0 이 되는 것은 증명했지만,
+   `uvicorn[standard]` 를 실제로 깐 환경에서의 거동은 안 봤다. 다만 `http="h11"` 고정으로
+   그 경로 자체가 닫혔다.
+2. **공유 `/tmp` 심링크 TOCTOU 는 재현하지 않았다.** macOS 는 `$TMPDIR` 가 사용자별이라 공격
+   조건을 못 만든다 — `mkdtemp` 가 그 클래스를 없앤다는 판단은 **추론 판정**이다.
+3. **pytest-xdist 워커 병렬은 미확인.** 동시성은 별도 프로세스 2개로만 쟀다(xdist 미설치).
+   워커가 같은 프로세스 트리에서 `conftest` 를 어떻게 로드하는지에 따라 결과가 다를 수 있다.
+4. **`atexit` 가 안 도는 종료(SIGKILL, `os._exit`)에서는 임시 디렉터리가 남는다.** 실행으로
+   확인하지 않았다 — 코드 형태로만 판단했고, 남아도 빈 sqlite 하나라 무해로 봤다.
+5. **R-5 “토큰=관리자” 데이터 불변식은 여전히 테스트로 지켜지지 않는다.** 비관리자 행을 만드는
+   라우트가 앱에 없어 음성 테스트를 쓸 수 없다. 가입·초대 기능이 생기면 이 오라클은 회귀를 못 잡는다.
+6. **토큰 폐기(revocation) 부재는 이 리뷰가 판정하지 않았다.** DB 에 없는 사용자로 서명한 유효
+   토큰이 200 을 받는 것은 실행으로 확인했다(위 authz 프로브). 앱 설계 판단이라 사람 몫이다.
+7. **`/docs`·`/openapi.json`·`/redoc` 무인증 200 의 실질 위험도는 판정하지 않았다.** 직전 라운드에서
+   기각(오라클 범위 밖 + 테스트로 200 을 고정하면 나중에 닫는 것을 막는다)했고 이번 델타가
+   그 전제를 바꾸지 않았다. 프로덕션에서 닫을지는 사람 판단.
+8. **의존성을 실제로 올려 보지 않았다.** 이 오라클의 최종 증명은 “h11·jinja2 를 올렸을 때 red/green
+   이 의미를 갖는가”인데 이번 리뷰도 현재 버전에서의 커버리지만 쟀다. `osv-scanner.toml` 해소 순서
+   2단계(업그레이드)는 아직 아무도 실행하지 않았다.
+9. **`python-multipart` 개명 시나리오는 합성 프레임으로만 쟀다.** 실제 0.0.12+ 를 설치해 돌리지
+   않았다(의존성 변경 금지 C-2). 또한 동의어 매칭은 **다른 배포판이 같은 `multipart` 모듈명을
+   쓰는 경우**(PyPI `multipart` vs `python-multipart` 충돌)를 구분하지 못한다 — 락파일에 없어
+   실현 경로가 없다고 보고 finding 으로 세우지 않았다.
+10. **`function_calling_deck.html`** 이 레포 루트에 untracked 로 남아 있다(커밋에서는 빠졌다).
+    이번 기능 산출물이 아니어서 리뷰 대상에서 제외했다 — 삭제·보관은 사람이 판단한다.
+11. **`.agents/context/artifacts/http-auth-oracle/06-verification.md` 가 untracked 다.** 6단계
+    산출물이 커밋되지 않은 상태라 이 리뷰는 워킹트리 사본을 읽었다.
 
 ---
 
 ## 숨은 결합 발견
 
-새로 발견한 것 1건 (`.agents/context/codebase-conventions.md` § 숨은 결합에 append 대상 —
-리뷰어는 파일을 수정하지 않으므로 메인 에이전트가 올린다):
-
-| 결합 | 왜 안 보이나 | 발견 경위 |
-|---|---|---|
-| `tests/test_http_socket.py` 의 h11 프레임 계측 ↔ **httpx/httpcore 자신의 h11 사용** | 계측 스레드에 서버와 클라이언트가 같이 있어, 프레임이 어느 쪽 것인지 파일만 보면 구분되지 않는다. 게다가 `uvicorn.Config(http="auto")` 는 `httptools` 가 깔리면 조용히 서버 파서를 바꾼다 — 클라이언트 h11 이 남아 단언은 계속 초록이다 | 2026-08-02 7단계 verifier 프로브 (h11 미사용 생 asyncio 서버에 요청 → 184 프레임 관측) |
-
-기존 5건(`codebase-conventions.md` 에 이번 브랜치가 등재한 것)은 전부 코드와 대조해 정확함을
-확인했다 — 특히 `app/main.py` 모듈 `app` ↔ 팩토리 밖 데코레이터는 `app/main.py:41-51` 로 재확인.
+새로 발견한 것 **없음**. 직전 라운드가 올린 “프레임 계측 ↔ 요청을 보내는 클라이언트 자신”
+항목이 `.agents/context/codebase-conventions.md:78` 에 등재돼 있음을 확인했다. 그 서술은
+**결합 자체**(같은 스레드에 서버와 클라이언트가 있으면 프레임이 섞인다)를 소유하므로 수정
+이후에도 유효하다 — 이번 수정은 그 결합을 없앤 것이 아니라 클라이언트 쪽에서 h11 을
+제거해 **피한** 것이기 때문이다.
 
 ---
 
-## 검증하지 못한 것 (필수)
+## 판정
 
-1. **`httptools` 설치 시나리오의 양성 대조를 못 돌렸다.** finding M 의 "uvicorn 이 h11 을
-   안 쓰게 되어도 테스트가 초록"은 `http="httptools"` 강제로 확인하려 했으나 패키지 미설치로
-   서버가 안 떴다. 클라이언트 측 h11 이 184 프레임을 낸다는 것은 직접 관측했으므로 결론은
-   유지되지만, **드리프트 시나리오 자체는 실행으로 못 봤다.**
-2. **`/tmp` 심볼릭 링크 TOCTOU 를 재현하지 않았다** (finding A 병합분). macOS 는 `$TMPDIR` 가
-   사용자별이라 이 머신에서 공격 조건을 못 만든다. 공유 `/tmp` 리눅스에서의 실제 악용
-   가능성은 코드 형태로만 판단했다 — 추론 판정.
-3. **진짜 워커 병렬(pytest-xdist) 거동 미확인.** finding A 는 별도 프로세스 2개로 쟀다.
-   xdist 는 미설치이고 워커 격리 시맨틱이 다를 수 있다.
-4. **R-5 "토큰=관리자"의 데이터 불변식은 테스트로 지켜지지 않는다** (finding H). 나중에
-   가입·초대 기능이 생기면 `KY_USER_L` 에 비관리자 행이 들어갈 수 있고, 그때 이 오라클은
-   "토큰=관리자"를 참으로 고정한 채 회귀를 못 잡는다. 지금은 그런 라우트가 없어 테스트 불가.
-5. **토큰 폐기 부재는 이 리뷰가 판정하지 않았다.** DB 에 없는 사용자로 서명한 유효 토큰이
-   200 을 받는 것은 실행으로 확인했다(위 authz 프로브). 앱 설계 판단이라 사람 몫으로 남긴다.
-6. **`/docs`·`/openapi.json` 노출의 실질 위험도는 판정하지 않았다.** 200 과 바디 크기만
-   확인했고(6082B openapi), 내부 스키마 노출이 이 내부 도구에서 허용 가능한지는 사람 판단이다.
-7. **의존성을 실제로 올려 보지 않았다.** 이 오라클의 최종 증명은 "h11·jinja2 등을 올렸을 때
-   red/green 이 의미를 갖는가"인데, 이번 리뷰는 현재 버전에서의 커버리지만 쟀다.
-   `osv-scanner.toml` 해소 순서 2단계(업그레이드)는 아직 아무도 실행하지 않았다.
-8. **`function_calling_deck.html`** 이 레포 루트에 untracked 로 있다. 이번 기능의 산출물
-   목록에 없어 리뷰 대상에서 제외했다 — 커밋에 섞이지 않도록 사람이 확인해야 한다.
-9. **잘못된 `cal_date`(예: `not-a-date`) → 500** 은 security finder 가 실측했고 나도 범위 밖으로
-   동의했다(앱 무수정). 이 오라클은 그 경로를 안 덮는다.
+PASS
 
----
+근거: 직전 라운드의 major 2건(M·A)이 **양성 대조를 갖춘 프로브로 해소 확인**됐고, 게이트
+라운드에서 추가된 수정(P)도 같은 방식으로 확인됐다. 이번 델타가 만든 새 결함은 Q 하나이며
+minor 다. 남은 것은 minor 6건(Q·N·B·D·O-1 + 프로세스 관측)뿐이라 §4 라우팅상
+**“minor 만 있음 → 결정 로그에 기록 후 통과”**에 해당한다. `03-design.md` 가 비게이트라
+§1-1 3번에 따라 2차 verifier 없이 1차 PASS 로 확정한다.
 
-## verdict
+통과 조건으로 결정 로그에 남길 minor (수정 강제 아님, 기록이 처리다):
 
-**BLOCK** — major 2건. 둘 다 `tests/` 안이고 앱은 무관하다.
+1. `[minor] tests/test_http_socket.py:113` — 응답 읽기 무한 대기 →
+   `asyncio.wait_for(reader.read(), timeout=5)`.
+2. `[minor] tests/test_http_env.py:127-128` — cryptography 음성 대조 표본이 주장 범위 밖
+   (**2라운드째**). 다음에 또 나오면 라인 패치 금지 — 양·음 계측을 같은 트래픽 위에서 재는
+   구조로 바꾼다.
+3. `[minor] tests/test_http_socket.py:1,8,29` — docstring·설계의 “1개/유일한”이 실제 2개와 어긋남.
+4. `[minor] tests/conftest.py:76` — 세션 공유 sqlite 쓰기 누수 (내용 단언이 생기는 순간 순서 의존).
+5. `[minor] tests/conftest.py:116` — `dependency_overrides.clear()` 전량 삭제 → `pop` 2회.
 
-`.agents/07-review.md` §4 라우팅상 **5단계(리팩토링)로 보내지 않는다** — 구현이 문제가
-아니라 테스트가 문제다. 규정 경로는 **사람 승인 → 4단계에서 `TEST_LOCK_OVERRIDE=1` 로 수정
-→ 6단계 재검증 → 7단계 델타 재리뷰**다.
-
-고쳐야 할 것 (둘 다 `tests/` 이므로 한 번의 unlock 으로 함께 처리한다):
-
-1. `[major] tests/test_http_socket.py:96` — h11 프레임 단언이 서버가 아니라 httpx 클라이언트의
-   h11 을 센다 (h11 미사용 서버에서 184 프레임 실측) → 그 테스트의 요청을
-   `asyncio.open_connection` 생 소켓으로 바꾸고, `uvicorn.Config` 에 `http="h11"` 를 명시한다.
-   같은 계열인 `[minor] tests/test_http_env.py:117-118`(cryptography 음성 대조 표본)도
-   **같은 수정 안에서** 양·음 계측 트래픽을 통일해 함께 닫는다 — 라인 패치 2개로 나누면
-   계열이 남는다.
-2. `[major] tests/conftest.py:20` — 고정 임시 DB 파일명이라 동시 pytest 프로세스가 서로를
-   깬다 (3/3 재현) → `tempfile.mkdtemp(prefix="moru_oracle_")` + teardown 에서 디렉터리째 삭제.
-   `/tmp` 심볼릭 링크 TOCTOU 도 같은 줄에서 닫힌다.
-
-minor 5건(B / D / O 3건)은 결정 로그에 기록 후 통과 가능하다. 다만 D 와 O 의 프레임 카운터
-중복은 위 1번을 고치는 김에 사실상 같이 닫히므로, 그때 함께 정리하는 것이 싸다.
-
-사람 판정이 필요한 것 (리뷰어가 결정하지 않음):
-- `/docs`·`/openapi.json`·`/redoc` 을 프로덕션에서 닫을지 — **이번 diff 에서는 건드리지 말 것**
-  (테스트로 200 을 고정하면 나중에 닫는 것을 막는다). 앱 후속 과제.
-- 토큰 폐기(revocation) 부재 — 앱 설계 판단.
+사람 판정이 필요한 것(리뷰어가 결정하지 않음, 전부 **앱 후속 과제** — 이번 diff 에서 건드리지 말 것):
+- 토큰 폐기(revocation) 부재 — DB 에 없는 사용자로 서명한 유효 토큰이 관리자 권한을 얻는다.
+- `/docs`·`/openapi.json`·`/redoc` 을 프로덕션에서 닫을지.
+- 잘못된 `cal_date` → 500 (정보 누출은 없음).
 
 ### 종료 조건
-- [x] 렌즈 3개 finder 원출력을 전부 읽었다 (비게이트 — 심층 적대 렌즈 미실행이 규정대로)
-- [x] blocker/major 후보가 전부 반박 검증을 거쳤다 (실행 가능한 것은 전부 프로브)
-- [x] verifier 자신이 추가한 major(M)도 동일한 반박 절차를 거쳐 기록했다
-- [x] 필수 authz 프로브 실행 (무토큰 + 타인 자격 6종 × 6라우트)
-- [x] 운영 가시성(#8) — 설계 §3-2 가 N/A (런타임 표면 없음)
+
+- [x] §4-1 델타 재리뷰 — 풀 재리뷰 승격 조건 미해당을 근거와 함께 판정 (앱 공유 코드 무수정,
+      conftest 파급은 전체 스위트 282 passed 로 대체 확인)
+- [x] 직전 major 2건이 실제로 해소됐는지 **프로브로** 확인 (둘 다 양성 대조 통과)
+- [x] 리팩토링이 새로 만든 문제 탐색 — 신규 후보 1건(Q), minor 로 확정
+- [x] verifier 자신이 추가한 finding(Q)도 동일한 반박 절차를 거쳐 기록
+- [x] 필수 authz 프로브 실행 (무토큰 + 타인 자격, 앱 무수정이지만 상시 규정대로)
+- [x] 운영 가시성(#8) — 설계 §3-2 N/A (런타임 표면 없음)
 - [x] 체크리스트 #6·#9 를 verifier 가 직접 커버
-- [x] "검증하지 못한 것" 작성 (9건)
-- [x] "숨은 결합 발견" 작성 (신규 1건)
-- [x] 프로브 파일 전량 삭제 — `git status --short` 에 프로브 잔재 없음 확인
-- [ ] blocker/major 없음 → **미충족 (major 2건)**
+- [x] Finder 원출력 섹션 첨부 (직전 라운드 3렌즈 + 심층 적대 미실행 사유)
+- [x] “검증하지 못한 것” 작성 (11건)
+- [x] “숨은 결합 발견” 작성 (없음 — 기존 1건 유효성 재확인)
+- [x] 프로브 파일 전량 삭제 (`$TMPDIR/moru7probe` 제거, `git status --short` 잔재 없음)
+- [x] blocker/major 없음

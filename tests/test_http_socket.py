@@ -110,7 +110,9 @@ async def test_real_socket_path_executes_h11_in_the_server(live_server):
     try:
         writer.write(b"GET / HTTP/1.1\r\nHost: testserver\r\nConnection: close\r\n\r\n")
         await writer.drain()
-        raw = await reader.read()
+        # 상한 없이 read() 하면 서버가 응답을 안 줄 때 무한 대기한다 —
+        # pytest 전역 timeout 이 없어 스위트 전체가 멈춘다.
+        raw = await asyncio.wait_for(reader.read(), timeout=5)
     finally:
         sys.setprofile(None)
         writer.close()
