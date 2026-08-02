@@ -169,3 +169,10 @@ cython_debug/
 ENGINE_GUIDE.md
 MCP_GUIDE.md
 
+
+# moru harness — 머신 로컬 상태 (커밋 금지)
+.agents/context/telemetry/
+.agents/context/.stop-dirty
+.agents/context/.stop-validate-running
+.agents/context/.stop-validate-failed
+.agents/context/.pipeline-active

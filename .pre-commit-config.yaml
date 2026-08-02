@@ -1,0 +1,246 @@
+default_stages: [pre-commit]
+# 이 설정의 게이트 대부분(process-audit · pr-review-gate · pytest · semgrep ·
+# osv-scanner · protect-default-branch · pr-body-template)이 pre-push 스테이지다.
+# 선언하지 않으면 맨 `pre-commit install` 이 pre-commit 훅만 깔고 그 일곱 개가
+# 통째로 잠든다 — 설치한 사람은 "훅이 있다"고 믿는데 실제로는 없는, 조용한
+# fail-open 이다. 신규 클론이 한 번의 `pre-commit install` 로 전부 받게 한다.
+default_install_hook_types: [pre-commit, pre-push]
+
+# moru 하네스 훅 체인. 두 층으로 읽는다:
+#   - 보안 바닥(gitleaks / lockfile-no-credentials / semgrep / osv-scanner)은
+#     언어 무관 커널이라 스택에 상관없이 그대로 온다. 바꾸지 않는다.
+#   - 품질 도구(ruff / pyright / 락파일)는 이 레포의 인스턴스라 스택에 맞게 바뀐다.
+#     이 레포는 poetry 이므로 모든 python 도구가 `poetry run` 을 거친다
+#     (.venv/bin 이 PATH 에 없다 — 실측 2026-07-31).
+repos:
+  - repo: local
+    hooks:
+      # --- 품질: 이 스택의 인스턴스 ---
+
+      # 비차단(`|| true` + verbose): 기존 코드에 린트 부채가 있어(건수는
+      # .agents/context/codebase-conventions.md 가 소유한다 — 여기 복제하지 않는다)
+      # 차단으로 걸면 무관한 부채가 모든 커밋을 막는다. 스테이징된 파일만 보므로
+      # 건드린 파일의 지적만 뜬다. 부채가 정리되면 `|| true` 를 떼는 것이 이 훅을
+      # 차단으로 올리는 방법이다. (--fix 를 쓰지 않는다: 비차단인데 자동 수정하면
+      # 스테이징 안 된 수정이 남아 커밋 내용과 트리가 어긋난다.)
+      - id: ruff
+        name: ruff (report-only — 부채 정리 후 차단으로)
+        # --force-exclude: ruff 는 경로를 명시적으로 받으면 `exclude` 를 무시한다.
+        # pre-commit 은 스테이징된 파일을 인자로 넘기므로, 이게 없으면
+        # pyproject.toml 이 제외한 tests/harness 가 그래도 린트된다 — 설정과 훅이
+        # 다른 말을 하게 된다.
+        entry: sh -c 'poetry run ruff check --force-exclude "$@" || true' --
+        language: system
+        types: [python]
+        verbose: true
+
+      # ruff-format 과 pyright 훅은 일부러 없다. 둘 다 기존 코드에 부채가 있어
+      # 매 커밋마다 같은 것이 다시 출력되면 신호가 죽는다. 설정은 pyproject.toml 에
+      # 있으니 `poetry run ruff format --check --diff .` / `poetry run pyright app`
+      # 로 언제든 돌릴 수 있고, 부채가 0 이 되는 시점에 차단 훅으로 추가한다.
+
+      - id: poetry-lock
+        name: poetry-lock (pyproject 와 poetry.lock 동기)
+        entry: poetry check --lock
+        language: system
+        files: ^(pyproject\.toml|poetry\.lock)$
+        pass_filenames: false
+
+      # --- 보안 바닥: 언어 무관, 그대로 유지 ---
+
+      # gitleaks 의 짝. allowlist 로 스캔에서 뺀 .env 계열이 git 에 들어가는 것을
+      # 파일명만 보고 결정적으로 막는다 — 엔트로피 휴리스틱보다 강하다.
+      # 스캐너가 놓칠 수 있는 저엔트로피 비밀(짧은 비밀번호, 내부 URL)도 여기서 걸린다.
+      # `! ... | grep` 이므로 매치가 없을 때 성공한다.
+      - id: no-env-files
+        name: no-env-files (.env 계열은 커밋될 수 없다)
+        entry: sh -c '! git diff --cached --name-only --diff-filter=d | grep -E "(^|/)\.env($|\.)"'
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: gitleaks
+        name: gitleaks (secret scan — any file type)
+        # `dir .` 는 워킹트리 파일을 스캔하므로 로컬(pre-commit)과 CI(--all-files)
+        # 양쪽에서 같은 뜻을 갖는다 — `protect --staged` 와 달리. 그 대가로 .gitignore
+        # 를 보지 않아 로컬 .env 에 상시 red 가 뜨므로, .gitleaks.toml 이 그 경로를
+        # allowlist 하고 위 no-env-files 훅이 그 구멍을 막는다.
+        entry: gitleaks dir . --config .gitleaks.toml --redact --no-banner
+        language: system
+        pass_filenames: false
+
+      - id: lockfile-no-credentials
+        name: lockfile-no-credentials
+        # gitleaks 의 엔트로피 규칙이 놓치는 결정적 결함: 락파일 안의 `user:pass@`.
+        entry: sh -c '! grep -nE "[a-z][a-z0-9+.-]*://[^/:@[:space:]]+:[^/@[:space:]]+@" "$@"' --
+        language: system
+        files: (^|/)(uv\.lock|poetry\.lock|Pipfile\.lock|package-lock\.json|pnpm-lock\.yaml|yarn\.lock|Cargo\.lock|go\.sum|Gemfile\.lock|composer\.lock)$
+
+      - id: test-lock
+        name: test-lock
+        entry: sh scripts/test_lock_check.sh
+        language: system
+        files: ^tests/
+        pass_filenames: false
+
+      - id: junk-comments
+        name: junk-comments
+        entry: >-
+          sh -c 'grep -nE "#[[:space:]]*(tmp|TEMP|scratch|REMOVE ME)\b|breakpoint\(\)|pdb\.set_trace\(\)" "$@"; [ $? -eq 1 ]' --
+        language: system
+        types: [text]
+        stages: [pre-commit]
+        exclude: ^(\.pre-commit-config\.yaml|scripts/pr_review_gate\.sh)$
+
+      - id: shell-syntax
+        name: shell-syntax (sh -n on every shell file)
+        # 파서는 shebang 이 정한다 — bash 전용 파일에 sh -n 을 돌리면 유효한 문법이
+        # dash 에서 깨져 커밋이 막힌다.
+        entry: >-
+          sh -c 'rc=0; for f in "$@"; do
+            case "$(head -n 1 "$f")" in
+              *bash*) bash -n "$f" || rc=1 ;;
+              *zsh*)  command -v zsh >/dev/null 2>&1 && { zsh -n "$f" || rc=1; } ;;
+              *)      sh -n "$f" || rc=1 ;;
+            esac
+          done; exit $rc' --
+        language: system
+        types: [shell]
+        stages: [pre-commit, pre-push]
+
+      - id: protect-default-branch
+        name: protect-default-branch (no direct default-branch push)
+        entry: sh scripts/protect_default_branch.sh
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
+      - id: pr-body-template
+        name: pr-body-template (PR body must use the repo template)
+        # 템플릿 없음 / gh 없음 / 열린 PR 없음 = no-op.
+        entry: sh scripts/pr_body_check.sh
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
+      # 커널 문서 여러 곳(workflow.md · 04-test-generation.md · team-policy.md ·
+      # 07-review.md · QUICKSTART.md)이 "CI 의 process-audit 이 LOCK 윈도우와
+      # override 를 서버측에서 감사한다"고 말한다. 이 레포는 GitHub 워크플로우를
+      # 두지 않기로 했으므로, 그 백스톱을 pre-push 로 옮겨 실제로 돌게 한다 —
+      # 배선하지 않으면 감사가 존재한다고 광고만 하고 아무 데서도 안 도는 상태가
+      # 된다 (게이트 실측 지적). 로컬 실행이라 서버측 강제력은 없다: 훅을 지운
+      # 사람은 우회할 수 있고, 그 층은 PR 리뷰가 대신한다.
+      #
+      # 푸시되는 ref 를 명시적으로 넘긴다. lib.sh 는 AUDIT_BRANCH 가 없으면
+      # `git symbolic-ref HEAD` 로 떨어지는데, 그건 CI 전제(체크아웃 = 감사 대상)다.
+      # 다른 브랜치에 서서 `git push origin feat/x` 하면 감사가 master 를 보고
+      # lib.sh 의 `master|main) exit 0` 에 걸려 **아무것도 검사하지 않고 통과한다**
+      # (실측: AUDIT_BRANCH=master 로 돌리면 검사 0건에 PASS). 서버측 백스톱이 없는
+      # 이 레포에서는 그게 감사의 완전한 소실이다. pr_review_gate.sh 가 같은 클래스를
+      # 푸시 ref 로 푸는 것과 같은 처방이다. 빈 값이면 `:-` 가 기존 폴백 사슬로
+      # 되돌리므로 `pre-commit run --all-files` 는 그대로 동작한다.
+      #
+      # **열린 PR 이 있을 때만 돈다.** 이 감사는 완성된 브랜치를 보는 검사다 —
+      # `20-test-lock.sh:45` 주석이 "an active lock marker **at PR time**" 이라고
+      # 스스로 선언한다. 작업 중 브랜치에 돌리면 반드시 실패한다: 스테이지 4~7 은
+      # 락이 살아 있어 `hard_violation`, 스테이지 0~3 은 `feat/` 인데 락 이력이 없어
+      # 또 `hard_violation`. `audit-exempt` 는 hard 를 못 내리고 `PR_REVIEW_SKIP` 은
+      # 이 훅을 안 건드리므로, 조건 없이 걸면 **7단계를 끝낼 때까지 백업 푸시조차
+      # 불가능**했다 (`--no-verify` 만이 탈출구 = 훅 전체 무력화). 배선을 스크립트의
+      # 선언에 맞춘다. **대신 잔여 위험을 정확히 적는다: "머지 전 최소 한 번" 은
+      # 성립하지 않는다.** 감사는 *열린 PR 이 있는 상태의 푸시* 에서만 돌고, PR 생성은
+      # 푸시가 아니다. 그래서 정상 흐름(마지막 푸시 → `gh pr create` → 머지)은 감사를
+      # 단 한 번도 돌리지 않는다. 이 레포에는 서버측 백스톱이 없으므로(§ 없는 것) 그
+      # 브랜치의 파이프라인 준수는 사람의 PR 리뷰만이 본다.
+      # 이걸 닫는 방법은 배선이 아니라 동반 호출이다 — `gh pr create` 직후에
+      # `AUDIT_BRANCH=<브랜치> sh scripts/process_audit.sh` 를 한 번 부르는 것
+      # (`pr_body_check.sh` 가 자기 문서에 적어 둔 것과 같은 모양). 그 호출은 이 레포가
+      # 아니라 moru 플러그인의 `ship-pr` 스킬이 소유하므로 여기서는 후속으로 남긴다.
+      #
+      # 같은 레포의 `pr_body_check.sh` 가 이미 이 모양이고("PR 없으면 no-op"),
+      # 거기서 배운 것을 그대로 쓴다: **"PR 없음"과 "gh 고장"을 구분한다.** 둘을
+      # 뭉치면 인증 만료가 조용한 통과로 읽혀 감사가 영영 안 도는데 초록으로 보인다.
+      # PR 조회도 푸시되는 ref 로 한다 — AUDIT_BRANCH 와 같은 브랜치를 봐야 한다.
+      #
+      # `refs/heads/` 를 반드시 벗긴다. `PRE_COMMIT_LOCAL_BRANCH` 는 git 이 pre-push
+      # stdin 으로 주는 `<local ref>` 원문이라 `refs/heads/feat/x` 형태다
+      # (`pre_commit/commands/hook_impl.py:130` 이 그 줄을 그대로 쪼개 넘긴다).
+      # 안 벗기면 `gh pr view refs/heads/feat/x` 가 "no pull requests found" 를 내고
+      # 아래 case 가 그걸 "PR 없음"으로 삼켜, **PR 이 열려 있어도 감사가 영영 안 돈다.**
+      # AUDIT_BRANCH 쪽은 `lib.sh` 가 스스로 `${branch#refs/heads/}` 하므로 무사했고,
+      # 이 gh 호출만 새로 노출된 자리였다. 서버측 백스톱이 없는 레포에서 그건 감사의
+      # 완전한 소실이다 — 이 훅 주석이 경고하는 바로 그 방향.
+      - id: process-audit
+        name: process-audit (파이프라인 준수 감사 — 열린 PR 이 있을 때)
+        entry: >-
+          sh -c 'br="${PRE_COMMIT_LOCAL_BRANCH:-}"; br="${br#refs/heads/}";
+            if ! command -v gh >/dev/null 2>&1; then
+              echo "process-audit: gh 없음 - 파이프라인 준수 UNVERIFIED" >&2; exit 0; fi;
+            err=$(mktemp) || exit 0;
+            if ! gh pr view ${br:+"$br"} --json number >/dev/null 2>"$err"; then
+              case "$(cat "$err" 2>/dev/null)" in
+                *"no pull requests found"*|*"no open pull requests"*)
+                  echo "process-audit: 이 브랜치에 열린 PR 이 없다 - 건너뜀 (작업 중 푸시)" ;;
+                *) echo "process-audit: gh 호출 실패 - 파이프라인 준수 UNVERIFIED" >&2 ;;
+              esac;
+              rm -f "$err"; exit 0; fi;
+            rm -f "$err";
+            AUDIT_BRANCH="$br" sh scripts/process_audit.sh'
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
+      - id: pr-review-gate
+        name: pr-review-gate (LLM final-diff review)
+        entry: sh scripts/pr_review_gate.sh
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
+      - id: pytest
+        name: pytest (affected — 전체는 수동)
+        # **러너·노브 스왑은 여기 없다.** 전부 `.agents/context/repo-profile.sh` 가
+        # 소유한다 — 스크립트가 프로필을 나중에 source 하므로 여기 적으면 조용히
+        # 무시되는 두 번째 사본이 된다. 프로필에 두면 `sh scripts/test_affected.sh`
+        # 직접 실행도 같은 값으로 돈다 (훅 env 에만 뒀을 때 직접 실행이 rc=127 로
+        # 죽는 것을 실측했다).
+        #
+        # `scripts/*.sh` 만 고친 푸시가 테스트 0건으로 통과하던 것은 커널 0.25.0 이
+        # 전용 문(`HARNESS_SRC_RE`)으로 닫았다. 이 레포는 기본값이 맞아 러너만 스왑한다.
+        entry: sh scripts/test_affected.sh
+        language: system
+        always_run: true
+        pass_filenames: false
+        stages: [pre-push]
+
+      - id: semgrep
+        name: semgrep (SAST — 이 브랜치가 새로 만든 것만)
+        # osv-scanner.toml 과 같은 결정: 설치 시점의 기존 지적(Dockerfile 의
+        # missing-user 1건)은 기준선 아래로 내리고, 이 브랜치가 **새로** 만든
+        # 지적만 막는다. 기준선은 기본 브랜치와의 merge-base 라 브랜치마다 정확하다.
+        # merge-base 를 못 구하면 전체 스캔으로 떨어진다 — fail-closed 방향이다.
+        # 기존 지적은 .agents/context/codebase-conventions.md 가 기록한다.
+        # 기본 브랜치 이름은 scripts/default_branch.sh 가 판정한다 — 그 헤더가
+        # "never hardcode the default branch name" 를 선언하고 다른 게이트도 전부
+        # 그걸 쓴다.
+        entry: >-
+          sh -c 'base=$(git merge-base HEAD "$(sh scripts/default_branch.sh)" 2>/dev/null);
+            set -- --config p/security-audit --config p/owasp-top-ten --error --metrics off --quiet;
+            if [ -n "$base" ]; then set -- "$@" --baseline-commit "$base"; fi;
+            semgrep "$@" .'
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+
+      - id: osv-scanner
+        name: osv-scanner (dependency CVEs — all ecosystems)
+        # poetry.lock 을 포함해 지원 락파일을 자동 탐색한다. 네트워크를 쓰므로 pre-push.
+        entry: osv-scanner --recursive .
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
