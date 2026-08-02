@@ -21,7 +21,11 @@ from tests.conftest import ADMIN_ID, ADMIN_PW, TEST_ENV
 # ASGITransport 로 덮이는 취약 패키지. `osv-scanner.toml` 등재 건수를 함께 적는다.
 # h11 은 여기 없다 — ASGI 를 직접 부르면 HTTP 바이트 파싱이 없어 0 프레임이다.
 # 그쪽은 `test_http_socket.py` 가 실소켓으로 덮는다.
-COVERED_PACKAGES = ["jinja2", "starlette", "jwt", "multipart"]
+# 값은 **모듈 디렉터리 이름**이다(배포 이름이 아니다). `python-multipart` 는 0.0.12
+# 에서 모듈을 `multipart` → `python_multipart` 로 개명했으므로 둘 다 받는다 — 한쪽만
+# 적으면 업그레이드하는 순간 "안 덮인다"로 false red 가 나고, 그건 이 오라클의 목적
+# (업그레이드를 가능하게)과 정반대다 (설계 A-10).
+COVERED_PACKAGES = ["jinja2", "starlette", "jwt", ("multipart", "python_multipart")]
 
 
 def test_config_uses_the_mock_values_not_the_developer_env():
@@ -37,18 +41,20 @@ def test_config_uses_the_mock_values_not_the_developer_env():
 
 
 def _count_frames(packages):
+    """각 항목은 모듈 이름 하나 또는 **동의어 튜플**이다 (개명 대응). 계수 키는 첫 이름."""
     counts = collections.Counter()
-    watched = tuple(packages)
+    watched = [(p[0], tuple(p)) if isinstance(p, tuple) else (p, (p,)) for p in packages]
 
     def tracer(frame, event, arg):
         if event != "call":
             return
         filename = frame.f_code.co_filename
-        for pkg in watched:
-            if f"/site-packages/{pkg}/" in filename or filename.endswith(
-                f"/site-packages/{pkg}.py"
+        for key, aliases in watched:
+            if any(
+                f"/site-packages/{a}/" in filename or filename.endswith(f"/site-packages/{a}.py")
+                for a in aliases
             ):
-                counts[pkg] += 1
+                counts[key] += 1
                 break
 
     return counts, tracer
@@ -87,7 +93,11 @@ async def test_the_oracle_actually_executes_the_vulnerable_packages(seeded_app, 
     finally:
         sys.setprofile(None)
 
-    missing = [pkg for pkg in COVERED_PACKAGES if counts[pkg] == 0]
+    missing = [
+        (p[0] if isinstance(p, tuple) else p)
+        for p in COVERED_PACKAGES
+        if counts[p[0] if isinstance(p, tuple) else p] == 0
+    ]
     assert not missing, (
         f"덮는다고 선언한 패키지가 실행되지 않았다: {missing}. "
         f"실측: {dict(counts)}. 선언과 실행이 갈라지면 이 오라클은 가짜다."

@@ -59,4 +59,3 @@ async def test_excel_export_streams_a_workbook(admin_client):
     # xlsx 는 zip 컨테이너다. 매직 바이트로 "진짜 워크북인가"를 본다 —
     # 상태 코드만 보면 빈 바디도 통과한다.
     assert res.content[:2] == b"PK", "xlsx zip 시그니처가 아니다"
-    assert len(res.content) > 0

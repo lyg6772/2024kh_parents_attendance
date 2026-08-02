@@ -14,6 +14,7 @@
 `.agents/context/codebase-conventions.md` § 숨은 결합 이 소유한다.
 """
 
+import atexit
 import os
 import shutil
 import tempfile
@@ -23,6 +24,9 @@ import tempfile
 # (`table "KY_ATDC_L" already exists`). 공유 `/tmp` 에서는 심링크 TOCTOU 표면도
 # 같은 줄에서 생긴다. `mkdtemp` 는 프로세스마다 다른 디렉터리를 0700 으로 만든다.
 _DB_DIR = tempfile.mkdtemp(prefix="moru_oracle_")
+# HTTP fixture 를 안 쓰는 실행(예: 유닛 테스트만)도 이 디렉터리를 만들므로 정리를
+# fixture teardown 에만 걸면 빈 디렉터리가 쌓인다.
+atexit.register(shutil.rmtree, _DB_DIR, True)
 _DB_FILE = os.path.join(_DB_DIR, "test.db")
 
 # `:memory:` 를 쓰지 않는 이유: in-memory sqlite 는 **커넥션마다 별개 DB** 라
@@ -76,7 +80,6 @@ def http_db():
     디렉터리가 이 프로세스 전용이라 시작 시 삭제할 것이 없다 (`mkdtemp`).
     """
     yield _DB_FILE
-    shutil.rmtree(_DB_DIR, ignore_errors=True)
 
 
 @pytest.fixture

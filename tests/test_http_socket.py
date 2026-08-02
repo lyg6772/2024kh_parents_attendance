@@ -88,7 +88,6 @@ async def test_real_socket_path_executes_h11_in_the_server(live_server):
     그래서 클라이언트 쪽에서 h11 을 **제거한다**: 생 소켓으로 바이트를 직접 쓴다.
     그러면 잡히는 h11 프레임은 서버 것뿐이다.
     """
-    import asyncio
     import collections
     import sys
     from urllib.parse import urlparse
@@ -109,9 +108,7 @@ async def test_real_socket_path_executes_h11_in_the_server(live_server):
     reader, writer = await asyncio.open_connection(parsed.hostname, parsed.port)
     sys.setprofile(tracer)
     try:
-        writer.write(
-            b"GET / HTTP/1.1\r\nHost: testserver\r\nConnection: close\r\n\r\n"
-        )
+        writer.write(b"GET / HTTP/1.1\r\nHost: testserver\r\nConnection: close\r\n\r\n")
         await writer.drain()
         raw = await reader.read()
     finally:
