@@ -15,9 +15,15 @@
 """
 
 import os
+import shutil
 import tempfile
 
-_DB_FILE = os.path.join(tempfile.gettempdir(), "moru_oracle_test.db")
+# 고정 파일명을 쓰면 같은 사용자의 두 pytest 프로세스(브랜치 2개·병렬 CI·병렬
+# 에이전트)가 서로의 DB 를 지운다 — 실측 2026-08-02: 동시 2프로세스 3/3 재현
+# (`table "KY_ATDC_L" already exists`). 공유 `/tmp` 에서는 심링크 TOCTOU 표면도
+# 같은 줄에서 생긴다. `mkdtemp` 는 프로세스마다 다른 디렉터리를 0700 으로 만든다.
+_DB_DIR = tempfile.mkdtemp(prefix="moru_oracle_")
+_DB_FILE = os.path.join(_DB_DIR, "test.db")
 
 # `:memory:` 를 쓰지 않는 이유: in-memory sqlite 는 **커넥션마다 별개 DB** 라
 # fixture 가 만든 테이블을 라우트의 세션이 못 본다 (실측: `no such table`).
@@ -65,12 +71,12 @@ async def db_session():
 
 @pytest.fixture(scope="session")
 def http_db():
-    """HTTP 테스트용 sqlite 파일. 세션 스코프 — 매 테스트 재생성은 비싸다."""
-    if os.path.exists(_DB_FILE):
-        os.remove(_DB_FILE)
+    """HTTP 테스트용 sqlite 파일. 세션 스코프 — 매 테스트 재생성은 비싸다.
+
+    디렉터리가 이 프로세스 전용이라 시작 시 삭제할 것이 없다 (`mkdtemp`).
+    """
     yield _DB_FILE
-    if os.path.exists(_DB_FILE):
-        os.remove(_DB_FILE)
+    shutil.rmtree(_DB_DIR, ignore_errors=True)
 
 
 @pytest.fixture

@@ -30,8 +30,15 @@ def _free_port() -> int:
 async def live_server(seeded_app):
     """인프로세스 uvicorn. 같은 이벤트 루프에서 서버 태스크로 돌린다."""
     port = _free_port()
+    # http="h11" 을 못 박는다: uvicorn 은 httptools 가 설치돼 있으면 그쪽을 쓴다.
+    # 무엇이 파싱하는지가 이 테스트의 주장이므로 구현체를 우연에 맡기지 않는다.
     server_config = uvicorn.Config(
-        seeded_app, host="127.0.0.1", port=port, log_level="warning", lifespan="off"
+        seeded_app,
+        host="127.0.0.1",
+        port=port,
+        log_level="warning",
+        lifespan="off",
+        http="h11",
     )
     server = uvicorn.Server(server_config)
     task = asyncio.create_task(server.serve())
@@ -69,15 +76,24 @@ async def test_app_serves_over_a_real_socket(live_server):
         assert protected.headers["location"] == "/login"
 
 
-async def test_real_socket_path_executes_h11(live_server):
-    """음성 대조의 반대편 — 이 경로가 정말 h11 을 태우는지 프레임으로 확인한다.
+async def test_real_socket_path_executes_h11_in_the_server(live_server):
+    """**서버가** h11 로 파싱하는지 확인한다 — 클라이언트가 아니라.
 
-    `test_http_env.py` 는 ASGITransport 에서 h11 이 0 임을 고정한다. 두 단언이
-    짝이다: 하나라도 없으면 "h11 을 덮는다"가 검증되지 않는다.
+    이 테스트는 한 번 틀렸었다(2026-08-02 → 08-03 수정). `httpx` 로 요청하면서
+    프로파일러를 걸면, 서버와 클라이언트가 **같은 이벤트 루프·같은 스레드**에서 도는
+    탓에 httpx 자신의 h11(httpcore 경유)까지 함께 세어진다. h11 을 전혀 쓰지 않는
+    서버로도 프레임이 잡혀(실측 184), 단언이 서버와 무관하게 초록이었다 — 이 브랜치가
+    없애려던 "가짜 초록"이 계측기 안에 있었다.
+
+    그래서 클라이언트 쪽에서 h11 을 **제거한다**: 생 소켓으로 바이트를 직접 쓴다.
+    그러면 잡히는 h11 프레임은 서버 것뿐이다.
     """
+    import asyncio
     import collections
     import sys
+    from urllib.parse import urlparse
 
+    parsed = urlparse(live_server)
     counts = collections.Counter()
 
     def tracer(frame, event, arg):
@@ -85,14 +101,29 @@ async def test_real_socket_path_executes_h11(live_server):
             return
         if "/site-packages/h11/" in frame.f_code.co_filename:
             counts["h11"] += 1
+        elif "/site-packages/httpx/" in frame.f_code.co_filename or (
+            "/site-packages/httpcore/" in frame.f_code.co_filename
+        ):
+            counts["client"] += 1
 
-    async with httpx.AsyncClient(base_url=live_server, follow_redirects=False) as client:
-        sys.setprofile(tracer)
-        try:
-            await client.get("/")
-        finally:
-            sys.setprofile(None)
+    reader, writer = await asyncio.open_connection(parsed.hostname, parsed.port)
+    sys.setprofile(tracer)
+    try:
+        writer.write(
+            b"GET / HTTP/1.1\r\nHost: testserver\r\nConnection: close\r\n\r\n"
+        )
+        await writer.drain()
+        raw = await reader.read()
+    finally:
+        sys.setprofile(None)
+        writer.close()
+        await writer.wait_closed()
 
+    assert raw.startswith(b"HTTP/1.1 200"), raw[:120]
+    assert counts["client"] == 0, (
+        f"클라이언트 라이브러리가 {counts['client']} 프레임 돌았다 — 생 소켓이어야 "
+        "h11 계수가 서버 것임이 보장된다"
+    )
     assert counts["h11"] > 0, (
-        "실소켓 경로에서도 h11 프레임이 0 이다 — 이 테스트가 h11 을 덮는다는 주장이 거짓이다"
+        "생 소켓 요청인데 h11 프레임이 0 이다 — 서버가 h11 로 파싱한다는 주장이 거짓이다"
     )

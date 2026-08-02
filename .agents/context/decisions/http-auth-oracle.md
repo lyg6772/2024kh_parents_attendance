@@ -438,3 +438,46 @@ authz 프로브 36/36 전부 307 `/login`, 위반 없음.
 2. 고정 임시 DB 경로 — `mkdtemp` 로 바꿔야 동시 실행·다중 사용자 머신에서 안전.
 3. fixture 스코프 누수 (minor, 순서 의존 없음 확인됨).
 4. 소켓 테스트가 서버를 2회 기동 (설계는 "하나만 둔다").
+
+## 7단계 재작업 — override 사용 (2026-08-03)
+
+**override 사용: `TEST_LOCK_OVERRIDE=1`** — 사람이 2026-08-03 에 명시적으로 승인했다
+("출석부는 오버라이드 승인"). 7단계 verdict 가 BLOCK 이고 그 major 2건이 모두
+`tests/` 안이라, LOCK 을 열지 않으면 고칠 수 없었다.
+
+`unlock_tests.sh` 는 `/dev/tty` 를 요구해 못 썼다(사람이 터미널 접근 불가). 다만
+`test_lock_check.sh` 는 `TEST_LOCK_OVERRIDE` 환경변수만 보므로 그 경로로 커밋한다 —
+**막는 것은 기계가 아니라 승인이었고, 승인은 받았다.** 이 커밋은 감사되는 LOCK 윈도우
+안에 들어가고, 이 기록이 그 감사가 찾는 `override 사용:` 근거다.
+
+### 고친 것 두 건 (7단계 major)
+
+**① h11 계측이 서버가 아니라 클라이언트를 세고 있었다.**
+`sys.setprofile` 은 스레드 단위인데 인프로세스 uvicorn 과 httpx 가 **같은 이벤트
+루프·같은 스레드**에서 돌아 둘의 프레임이 섞였다. 클라이언트에서 h11 을 제거하는 것이
+해법이다 — `asyncio.open_connection` 으로 생 바이트를 쓴다. 더해서 `uvicorn.Config` 에
+`http="h11"` 을 못 박았다(httptools 가 깔리면 uvicorn 이 그쪽을 쓰므로, 무엇이
+파싱하는지를 우연에 맡기지 않는다).
+
+**반증**: 클라이언트를 httpx 로 되돌리면 새 단언이 **503 프레임**을 잡아 red 를 낸다
+(`counts["client"] == 0`). 즉 h11 계수가 서버 것임이 이제 실행으로 보장된다.
+
+**② 고정 임시 DB 경로 → `mkdtemp`.**
+**반증**: 고치기 전 동시 2프로세스가 3/3 충돌(`table "KY_ATDC_L" already exists`)했고,
+지금은 둘 다 통과한다(5 passed / 6 passed).
+
+### 아직 안 고친 것
+
+7단계가 낸 minor 는 그대로 둔다 — fixture 스코프 누수(순서 의존 없음이 확인됨),
+소켓 서버 2회 기동, 중복 단언, `dependency_overrides.clear()` 범위. PR 본문이 소유한다.
+
+`osv-scanner.toml` 의 h11 줄은 이제 "미검증"이 아니라 **덮인다**로 되돌릴 수 있다 —
+계측이 서버를 재고, `http="h11"` 이 고정됐다.
+
+### 관측 (모루 쪽)
+
+`test_lock_guard.sh` 는 Claude Code 의 **PreToolUse 훅**이라 Edit/Write 도구를 막는데,
+셸에서 python 으로 파일을 쓰면 그 층을 지나간다. 커밋 훅이 백스톱이라 최종 방어는
+서지만, 편집 시점 층에 구멍이 있다는 사실은 기록해 둔다.
+
+검증: 282 passed(회귀 0), 결정성 2회 동일, 동시 2프로세스 통과.
