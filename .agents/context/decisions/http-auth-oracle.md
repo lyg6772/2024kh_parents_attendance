@@ -263,8 +263,8 @@ conftest 가 먼저 세우면 개발자의 `.env` 가 이를 못 덮는다. 즉 
 ## 4단계 — 테스트 생성 + LOCK (2026-08-02)
 
 산출물: `04-test-audit.md`(감사), `04-mutation-check.md`(뮤테이션).
-신규 테스트 **40개** — `test_http_auth.py` 23 · `test_http_pages.py` 6 ·
-`test_http_agent.py` 5 · `test_http_env.py` 5 · `test_http_socket.py` 2 + `conftest.py` 개편.
+신규 테스트 **40개** (실측 `--collect-only`) — `test_http_auth.py` 23 · `test_http_pages.py` 6 ·
+`test_http_agent.py` 4 · `test_http_env.py` 5 · `test_http_socket.py` 2 + `conftest.py` 개편.
 
 ### 뮤테이션 검증이 오라클 구멍 하나를 뚫었다 (이번 단계의 수확)
 

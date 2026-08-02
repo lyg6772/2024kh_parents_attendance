@@ -75,6 +75,7 @@ tests/             pytest, conftest.py 가 aiosqlite 인메모리 세션 픽스�
 | `app/dao/*.py` 의 `Depends(DB().get_db_session)` ↔ `app/agent/router.py` 의 `Depends(get_session)` | 같은 DB 인데 **의존성 키가 둘**이다. `app/util/db.py` 안에서만 보면 형제로 보여 하나만 갈아끼우기 쉽고, 그러면 `/agent/*` 만 실 DB 로 샌다 | 같은 단계, grep + `dependency_overrides` 실측 |
 | `httpx.ASGITransport` ↔ `app/main.py` 의 lifespan (`create_tables` · `_seed_admin_user`) | ASGITransport 는 lifespan 이벤트를 **안 돌린다**. 게다가 그 lifespan 은 `"local" in DB_URL` 조건부라 이중으로 안 뜬다. 실기동에서는 되던 시드가 테스트에서만 사라진다 | 같은 단계, 실측 |
 | `app/config.py` ↔ **작업 디렉터리** (`os.getcwd()/app/.env`) + `load_dotenv(override=False)` | 환경변수처럼 보이지만 실제 변수는 **cwd** 다 — 다른 디렉터리에서 재면 값이 달라진다. 그리고 `override=False` 라 **먼저 세운 값이 이긴다** | 같은 브랜치 1단계에서 이 함정에 실제로 빠져 잘못된 수용 기준을 세웠고, 2단계 §5 가 재확인 |
+| 프레임 프로파일 계측 ↔ **요청을 보내는 클라이언트 자신** | `sys.setprofile` 을 `client.get()` 주위에 걸면 서버뿐 아니라 **httpx 자신이 쓰는 라이브러리**가 함께 잡힌다. httpx 는 실소켓 요청에 httpcore→h11 을 쓰므로, "서버가 h11 로 파싱한다"를 재려던 계측이 클라이언트 h11 을 세고 **서버가 h11 을 안 써도 초록**이 된다 | 2026-08-02 `feat/http-auth-oracle` 7단계 리뷰 — h11 을 전혀 쓰지 않는 생 asyncio 서버로 요청해 184 프레임 관측 |
 | `app/agent/llm.py::_llm_instance` ↔ 프로세스 수명 | 모듈 전역 캐시라 **최초 `get_llm()` 결과가 프로세스 끝까지 산다.** 키를 나중에 바꿔도 반영되지 않는다 (키가 비면 예외라 캐시되지 않아 현재는 안전) | 같은 단계, `app/agent/llm.py:219-244` 확인 |
 
 ## 인프라 컨텍스트
