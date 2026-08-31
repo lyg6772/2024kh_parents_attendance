@@ -1,9 +1,12 @@
-"""app/util/db.py의 pool_pre_ping/pool_recycle이 실제로 죽은 커넥션을 재연결하는지 검증.
+"""app/util/db.py의 pool_pre_ping/pool_recycle 검증.
 
-sqlite+aiosqlite 파일 URL은 기본이 NullPool(체크아웃마다 새 커넥션)이라 pool_pre_ping이
-사실상 no-op이다 — 그래서 여기서는 운영 Oracle 커넥션이 쓰는 것과 같은 풀 클래스
-(AsyncAdaptedQueuePool)을 강제해, "idle 중이던 커넥션이 DB/방화벽 쪽에서 조용히
-끊긴 뒤 재사용되는" 실제 장애 시나리오를 재현한다.
+두 층으로 나눈다:
+1. `DB().init_db()`를 실제로 호출해 엔진에 두 설정값이 실려 있는지 확인 — 이게 지워지면
+   바로 빨개진다.
+2. sqlite+aiosqlite 파일 URL은 기본이 NullPool(체크아웃마다 새 커넥션)이라 pool_pre_ping이
+   사실상 no-op이다 — 그래서 운영 Oracle 커넥션이 쓰는 것과 같은 풀 클래스
+   (AsyncAdaptedQueuePool)을 강제해, "idle 중이던 커넥션이 DB/방화벽 쪽에서 조용히
+   끊긴 뒤 재사용되는" 실제 장애 시나리오가 그 설정으로 복구되는지 재현한다.
 """
 
 import tempfile
@@ -11,6 +14,14 @@ import tempfile
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import AsyncAdaptedQueuePool
+
+from app.util.db import DB
+
+
+def test_init_db_sets_pool_pre_ping_and_recycle():
+    DB().init_db()
+    assert DB().engine.pool._pre_ping is True
+    assert DB().engine.pool._recycle == 1800
 
 
 async def _kill_conn_after_checkin(pre_ping):
