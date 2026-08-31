@@ -17,7 +17,7 @@ class DB(SingletonClass):
 
     def init_db(self):
         url = self._build_url()
-        self.engine = create_async_engine(url)
+        self.engine = create_async_engine(url, pool_pre_ping=True, pool_recycle=1800)
         self.session_local = sessionmaker(autoflush=True, bind=self.engine, class_=AsyncSession)
 
     async def create_tables(self):
