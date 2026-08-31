@@ -9,6 +9,7 @@
    끊긴 뒤 재사용되는" 실제 장애 시나리오가 그 설정으로 복구되는지 재현한다.
 """
 
+import os
 import tempfile
 
 from sqlalchemy.exc import DBAPIError
@@ -22,7 +23,8 @@ async def test_init_db_sets_pool_pre_ping_and_recycle():
     # DB는 SingletonClass다 — init_db()를 여기서 다시 부르면 다른 테스트가 쓰는
     # engine/session_local을 프로세스 전역으로 덮어쓴다. 끝나면 원래 걸로 되돌리고
     # 이 테스트가 새로 만든 엔진은 dispose한다.
-    old_engine, old_session_local = DB().engine, DB().session_local
+    old_engine = DB().engine
+    old_session_local = getattr(DB(), "session_local", None)
     DB().init_db()
     try:
         assert DB().engine.pool._pre_ping is True
@@ -34,9 +36,10 @@ async def test_init_db_sets_pool_pre_ping_and_recycle():
 
 
 async def _kill_conn_after_checkin(pre_ping):
-    with tempfile.NamedTemporaryFile(suffix=".db") as f:
+    with tempfile.TemporaryDirectory() as d:
+        db_path = os.path.join(d, "t.db")
         engine = create_async_engine(
-            f"sqlite+aiosqlite:///{f.name}",
+            f"sqlite+aiosqlite:///{db_path}",
             poolclass=AsyncAdaptedQueuePool,
             pool_pre_ping=pre_ping,
         )
