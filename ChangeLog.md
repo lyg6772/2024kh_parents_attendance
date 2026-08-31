@@ -1,5 +1,8 @@
 # CHANGE LOG
 
+## v1.0.7
+* DB 커넥션 pool_pre_ping/pool_recycle 적용 — 끊긴 커넥션 자동 재연결
+
 ## v1.0.6
 * LLM agent 로 기능 제어할 수 있게 추가. 
 * raw query 에서 orm 으로 DB 비종속적이게 추가
