@@ -18,10 +18,19 @@ from sqlalchemy.pool import AsyncAdaptedQueuePool
 from app.util.db import DB
 
 
-def test_init_db_sets_pool_pre_ping_and_recycle():
+async def test_init_db_sets_pool_pre_ping_and_recycle():
+    # DB는 SingletonClass다 — init_db()를 여기서 다시 부르면 다른 테스트가 쓰는
+    # engine/session_local을 프로세스 전역으로 덮어쓴다. 끝나면 원래 걸로 되돌리고
+    # 이 테스트가 새로 만든 엔진은 dispose한다.
+    old_engine, old_session_local = DB().engine, DB().session_local
     DB().init_db()
-    assert DB().engine.pool._pre_ping is True
-    assert DB().engine.pool._recycle == 1800
+    try:
+        assert DB().engine.pool._pre_ping is True
+        assert DB().engine.pool._recycle == 1800
+    finally:
+        new_engine = DB().engine
+        DB().engine, DB().session_local = old_engine, old_session_local
+        await new_engine.dispose()
 
 
 async def _kill_conn_after_checkin(pre_ping):
