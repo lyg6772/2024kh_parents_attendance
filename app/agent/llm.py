@@ -32,7 +32,9 @@ class LLMAdapter(ABC):
 
 
 class RateLimitError(Exception):
-    pass
+    """Primary 어댑터가 rate limit에 걸렸을 때 FailoverAdapter가 감지하는 신호.
+    GroqAdapter는 더 이상 이걸 던지지 않지만(429도 GroqUnavailableError로 통일),
+    다른 LLMAdapter 구현이 이 계약을 쓸 수 있어 인터페이스로 남긴다."""
 
 
 class GroqUnavailableError(Exception):
@@ -67,7 +69,7 @@ class GroqAdapter(LLMAdapter):
                 # 모델 자체 문제(폐기 등, 실측상 404)와 일시적 문제(429/5xx)만 다음 후보로.
                 if e.status_code in (400, 401, 403):
                     raise
-                logger.warning("Groq model %s unavailable (%s), trying next candidate", model, e)
+                logger.warning("Groq model %s unavailable (%s)", model, e)
                 last_err = e
                 continue
 
