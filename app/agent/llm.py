@@ -92,7 +92,7 @@ class GroqAdapter(LLMAdapter):
 
             return LLMResponse(content=msg.content)
 
-        raise GroqUnavailableError(str(last_err)) from last_err
+        raise GroqUnavailableError(f"Groq 후보 {self._models} 전부 실패: {last_err}") from last_err
 
 
 class GeminiAdapter(LLMAdapter):
