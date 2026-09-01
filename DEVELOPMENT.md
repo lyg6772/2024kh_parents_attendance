@@ -200,9 +200,9 @@ app/agent/
 기존 쿠키 JWT 공유. `/agent/*` 엔드포인트도 `get_current_user` 사용.
 
 ### LLM
-- Primary: Groq (`llama-3.3-70b-versatile`)
+- Primary: Groq — `GROQ_MODEL` 콤마 구분 후보 목록, 앞에서부터 순서대로 시도 (기본: `qwen/qwen3.8-27b,qwen/qwen3.6-27b,openai/gpt-oss-120b`)
 - Fallback: Gemini (`gemini-2.5-flash`)
-- `FailoverAdapter`: Groq rate limit 시 자동 전환
+- `FailoverAdapter`: Groq 후보 전체 실패(모델 폐기/rate limit) 시 자동 전환
 
 ### 도구 (6개)
 

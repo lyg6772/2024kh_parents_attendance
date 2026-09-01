@@ -14,6 +14,13 @@ ACCESS_TOKEN_EXPIRE_HOURS = int(os.environ.get("ACCESS_TOKEN_EXPIRE_HOURS", 8))
 ORACLE_CONNECTION_STRING = os.environ.get("ORACLE_CONNECTION_STRING", '')
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
-GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
+# 콤마로 구분한 후보 목록 — 앞에서부터 순서대로 시도, 하나 죽으면(모델 폐기/레이트리밋) 다음으로 넘어간다.
+GROQ_MODELS = [
+    m.strip()
+    for m in os.environ.get(
+        "GROQ_MODEL", "qwen/qwen3.8-27b,qwen/qwen3.6-27b,openai/gpt-oss-120b"
+    ).split(",")
+    if m.strip()
+]
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")

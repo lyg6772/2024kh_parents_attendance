@@ -35,44 +35,62 @@ class RateLimitError(Exception):
     pass
 
 
+class GroqUnavailableError(Exception):
+    """등록된 Groq 후보 모델을 전부 시도했지만 다 실패했다."""
+
+
 class GroqAdapter(LLMAdapter):
-    def __init__(self, api_key: str = "", model: str = ""):
+    def __init__(self, api_key: str = "", models: list[str] | None = None):
         from groq import AsyncGroq
 
         self._client = AsyncGroq(api_key=api_key or config.GROQ_API_KEY)
-        self._model = model or config.GROQ_MODEL
+        self._models = config.GROQ_MODELS if models is None else models
 
     async def chat(self, messages, tools=None) -> LLMResponse:
-        from groq import RateLimitError as GroqRateLimit
+        from groq import APIStatusError as GroqAPIStatusError
 
-        kwargs: dict = {"model": self._model, "messages": messages}
+        kwargs: dict = {"messages": messages}
         if tools:
             kwargs["tools"] = tools
             kwargs["tool_choice"] = "auto"
 
-        try:
-            resp = await self._client.chat.completions.create(**kwargs)
-        except GroqRateLimit as e:
-            raise RateLimitError(str(e)) from e
+        if not self._models:
+            raise GroqUnavailableError("GROQ_MODEL이 설정되지 않았습니다 (후보 모델 없음)")
 
-        msg = resp.choices[0].message
+        last_err: Exception | None = None
+        for model in self._models:
+            try:
+                resp = await self._client.chat.completions.create(model=model, **kwargs)
+            except GroqAPIStatusError as e:
+                # 401/403(키·권한)과 400(요청 자체 오류 — 잘못된 tool schema 등)은 모델을
+                # 바꿔도 똑같이 실패한다. 근본 원인을 숨기지 않도록 즉시 올린다.
+                # 모델 자체 문제(폐기 등, 실측상 404)와 일시적 문제(429/5xx)만 다음 후보로.
+                if e.status_code in (400, 401, 403):
+                    raise
+                logger.warning("Groq model %s unavailable (%s), trying next candidate", model, e)
+                last_err = e
+                continue
 
-        if msg.tool_calls:
-            tool_calls = [
-                ToolCall(
-                    id=tc.id,
-                    name=tc.function.name,
-                    arguments=(
-                        json.loads(tc.function.arguments)
-                        if isinstance(tc.function.arguments, str)
-                        else tc.function.arguments
-                    ),
-                )
-                for tc in msg.tool_calls
-            ]
-            return LLMResponse(content=msg.content, tool_calls=tool_calls)
+            msg = resp.choices[0].message
 
-        return LLMResponse(content=msg.content)
+            if msg.tool_calls:
+                tool_calls = [
+                    ToolCall(
+                        id=tc.id,
+                        name=tc.function.name,
+                        arguments=(
+                            json.loads(tc.function.arguments)
+                            if isinstance(tc.function.arguments, str)
+                            else tc.function.arguments
+                        ),
+                    )
+                    for tc in msg.tool_calls
+                ]
+                return LLMResponse(content=msg.content, tool_calls=tool_calls)
+
+            return LLMResponse(content=msg.content)
+
+        raise GroqUnavailableError(str(last_err)) from last_err
 
 
 class GeminiAdapter(LLMAdapter):
@@ -207,8 +225,8 @@ class FailoverAdapter(LLMAdapter):
     async def chat(self, messages, tools=None) -> LLMResponse:
         try:
             return await self.primary.chat(messages, tools)
-        except RateLimitError:
-            logger.warning("Primary LLM rate limited, falling back to secondary")
+        except (RateLimitError, GroqUnavailableError):
+            logger.warning("Primary LLM unavailable, falling back to secondary")
             return await self.fallback.chat(messages, tools)
 
 

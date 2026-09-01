@@ -1,4 +1,4 @@
-#!/bin/zsh
+#!/bin/sh
 
 # pyproject.toml에서 버전 파싱 (Python tomllib 사용)
 VERSION=$(python3 -c "
