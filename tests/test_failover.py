@@ -189,3 +189,15 @@ class TestGroqAdapterModelFallback:
         with pytest.raises(groq.AuthenticationError):
             await adapter.chat([{"role": "user", "content": "hi"}])
         assert adapter._client.chat.completions.requested_models == ["model-a"]
+
+    # 400(요청 자체 오류 — 잘못된 tool schema 등)도 모델을 바꿔도 똑같이 실패하므로 즉시 전파
+    async def test_does_not_retry_next_model_on_bad_request(self):
+        import groq
+
+        bad_request = _fake_groq_error(groq.BadRequestError, 400)
+        adapter = GroqAdapter(api_key="fake", models=["model-a", "model-b"])
+        adapter._client = _FakeGroqClient([bad_request, _groq_success("안 옴")])
+
+        with pytest.raises(groq.BadRequestError):
+            await adapter.chat([{"role": "user", "content": "hi"}])
+        assert adapter._client.chat.completions.requested_models == ["model-a"]

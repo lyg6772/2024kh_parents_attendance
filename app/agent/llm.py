@@ -64,9 +64,9 @@ class GroqAdapter(LLMAdapter):
             try:
                 resp = await self._client.chat.completions.create(model=model, **kwargs)
             except GroqAPIStatusError as e:
-                # 401/403(키·권한)과 400(요청 자체 오류 — 잘못된 tool schema 등)은 모델을
+                # 400(요청 자체 오류 — 잘못된 tool schema 등)/401/403(키·권한)은 모델을
                 # 바꿔도 똑같이 실패한다. 근본 원인을 숨기지 않도록 즉시 올린다.
-                # 모델 자체 문제(폐기 등, 실측상 404)와 일시적 문제(429/5xx)만 다음 후보로.
+                # 그 외 상태코드(모델 폐기=404 등, 429, 5xx 포함)는 다음 후보로.
                 if e.status_code in (400, 401, 403):
                     raise
                 logger.warning("Groq model %s unavailable (%s)", model, e)
