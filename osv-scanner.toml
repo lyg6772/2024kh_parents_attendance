@@ -56,10 +56,6 @@ id = "PYSEC-2026-1110"
 reason = "moru 하네스 설치 시점(2026-07-31)의 기존 부채. aiomysql 0.2.0 — 0.3.0 이상에서 해소."
 
 [[IgnoredVulns]]
-id = "PYSEC-2026-2132"
-reason = "moru 하네스 설치 시점(2026-07-31)의 기존 부채. click 8.1.7 — 8.3.3 이상에서 해소."
-
-[[IgnoredVulns]]
 id = "GHSA-537c-gmf6-5ccf"
 reason = "moru 하네스 설치 시점(2026-07-31)의 기존 부채. cryptography 44.0.3 — 48.0.1 이상에서 해소."
 
